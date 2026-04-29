@@ -250,7 +250,7 @@ export function ProductDialog({
                 id="unit"
                 value={formData.unit}
                 onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                placeholder="Ejem: unidad"
+                placeholder="Ejem: Docena"
               />
             </Field>
 
