@@ -47,7 +47,7 @@ export function ProductDialog({
     stock: 0,
     minStock: 10,
     discount: 0,
-    unit: 'unidad',
+    unit: '',
     image: '',
   })
 
@@ -77,7 +77,7 @@ export function ProductDialog({
         stock: 0,
         minStock: 10,
         discount: 0,
-        unit: 'unidad',
+        unit: '',
         image: '',
       })
     }
@@ -87,7 +87,7 @@ export function ProductDialog({
     e.preventDefault()
 
     if (!formData.name || !formData.sku) {
-      toast.error('El nombre y SKU son requeridos')
+      toast.error('El nombre y el codigo son requeridos')
       return
     }
 
@@ -118,14 +118,14 @@ export function ProductDialog({
           <div className="grid gap-6 py-4">
             <div className="grid grid-cols-2 gap-4">
               <Field>
-                <FieldLabel htmlFor="sku">SKU *</FieldLabel>
+                <FieldLabel htmlFor="sku">Codigo *</FieldLabel>
                 <Input
                   id="sku"
                   value={formData.sku}
                   onChange={(e) =>
                     setFormData({ ...formData, sku: e.target.value.toUpperCase() })
                   }
-                  placeholder="BEB-001"
+                  placeholder="Eje: BEB-001"
                 />
               </Field>
               <Field>
@@ -158,11 +158,11 @@ export function ProductDialog({
                 onChange={(e) =>
                   setFormData({ ...formData, name: e.target.value })
                 }
-                placeholder="Coca-Cola 600ml"
+                placeholder="Ejem: Coca-Cola 600ml"
               />
             </Field>
 
-            <Field>
+            {/*<Field>
               <FieldLabel htmlFor="description">Descripción</FieldLabel>
               <Textarea
                 id="description"
@@ -173,7 +173,7 @@ export function ProductDialog({
                 placeholder="Descripción del producto..."
                 rows={2}
               />
-            </Field>
+            </Field>*/}
 
             <div className="grid grid-cols-2 gap-4">
               <Field>
@@ -229,7 +229,7 @@ export function ProductDialog({
                   }
                 />
               </Field>
-              <Field>
+              {/*<Field>
                 <FieldLabel htmlFor="discount">Descuento (%)</FieldLabel>
                 <Input
                   id="discount"
@@ -241,31 +241,19 @@ export function ProductDialog({
                     setFormData({ ...formData, discount: parseInt(e.target.value) || 0 })
                   }
                 />
-              </Field>
+              </Field>*/}
             </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Field>
+              <FieldLabel htmlFor="unit">Unidad de Medida</FieldLabel>
+              <Input
+                id="unit"
+                value={formData.unit}
+                onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                placeholder="Ejem: unidad"
+              />
+            </Field>
 
-            <div className="grid grid-cols-2 gap-4">
-              <Field>
-                <FieldLabel htmlFor="unit">Unidad de Medida</FieldLabel>
-                <Select
-                  value={formData.unit}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, unit: value })
-                  }
-                >
-                  <SelectTrigger id="unit">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="unidad">Unidad</SelectItem>
-                    <SelectItem value="caja">Caja</SelectItem>
-                    <SelectItem value="paquete">Paquete</SelectItem>
-                    <SelectItem value="bolsa">Bolsa</SelectItem>
-                    <SelectItem value="libra">Libra</SelectItem>
-                    <SelectItem value="kilo">Kilogramo</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
               <Field>
                 <FieldLabel htmlFor="image">URL de Imagen</FieldLabel>
                 <Input
