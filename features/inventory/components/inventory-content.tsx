@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+
+import { useMemo, useState } from 'react'
 import { mockProducts } from '@/lib/mock-data'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,6 +19,13 @@ import { ProductTable } from './product-table'
 import { ProductDialog } from './product-dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { LayoutGrid, List } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import type { Product } from '@/types'
 
 export function InventoryContent() {
@@ -25,6 +33,7 @@ export function InventoryContent() {
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
   const [stockFilter, setStockFilter] = useState<string>('all')
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isCategoriesDialogOpen, setIsCategoriesDialogOpen] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [products, setProducts] = useState(mockProducts)
 
@@ -106,10 +115,18 @@ export function InventoryContent() {
             )}
           </p>
         </div>
-        <Button onClick={handleCreate}>
-          <Plus className="w-4 h-4 mr-2" />
-          Nuevo Producto
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setIsCategoriesDialogOpen(true)}
+          >
+            Ver categorias
+          </Button>
+          <Button onClick={handleCreate}>
+            <Plus className="w-4 h-4 mr-2" />
+            Nuevo Producto
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -198,6 +215,30 @@ export function InventoryContent() {
         product={selectedProduct}
         onSave={handleSave}
       />
+
+      <Dialog
+        open={isCategoriesDialogOpen}
+        onOpenChange={setIsCategoriesDialogOpen}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Categorias</DialogTitle>
+            <DialogDescription>
+              Lista de categorias disponibles para inventario.
+            </DialogDescription>
+          </DialogHeader>
+          <ul className="mt-3 space-y-2">
+            {PRODUCT_CATEGORIES.map((category) => (
+              <li
+                key={category}
+                className="rounded-md border px-3 py-2 text-sm"
+              >
+                {category}
+              </li>
+            ))}
+          </ul>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
