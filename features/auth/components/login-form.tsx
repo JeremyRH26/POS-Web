@@ -14,19 +14,19 @@ import { Eye, EyeOff, TrendingUp } from 'lucide-react'
 export function LoginForm() {
   const router = useRouter()
   const { login, isLoading } = useAuthStore()
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!email || !password) {
+    if (!username || !password) {
       toast.error('Por favor complete todos los campos')
       return
     }
 
-    const success = await login(email, password)
+    const success = await login(username, password)
 
     if (success) {
       toast.success('Bienvenido a La Exponencial')
@@ -61,15 +61,15 @@ export function LoginForm() {
           <form onSubmit={handleSubmit}>
             <FieldGroup>
               <Field>
-                <FieldLabel htmlFor="email">Correo Electrónico</FieldLabel>
+                <FieldLabel htmlFor="username">Usuario</FieldLabel>
                 <Input
-                  id="email"
-                  type="email"
-                  placeholder="correo@exponencial.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  id="username"
+                  type="text"
+                  placeholder="usuario"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
                   disabled={isLoading}
-                  autoComplete="email"
+                  autoComplete="username"
                 />
               </Field>
 
@@ -123,25 +123,6 @@ export function LoginForm() {
             </FieldGroup>
           </form>
 
-          <div className="mt-6 pt-6 border-t border-border">
-            <p className="text-xs text-muted-foreground text-center mb-3">
-              Credenciales de prueba:
-            </p>
-            <div className="grid gap-2 text-xs">
-              <div className="flex justify-between items-center p-2 rounded-md bg-muted/50">
-                <span className="text-muted-foreground">Admin:</span>
-                <code className="text-foreground">admin@exponencial.com / admin123</code>
-              </div>
-              <div className="flex justify-between items-center p-2 rounded-md bg-muted/50">
-                <span className="text-muted-foreground">Gerente:</span>
-                <code className="text-foreground">manager@exponencial.com / manager123</code>
-              </div>
-              <div className="flex justify-between items-center p-2 rounded-md bg-muted/50">
-                <span className="text-muted-foreground">Ventas:</span>
-                <code className="text-foreground">sales@exponencial.com / sales123</code>
-              </div>
-            </div>
-          </div>
         </CardContent>
       </Card>
     </div>

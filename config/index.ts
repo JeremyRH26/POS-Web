@@ -57,6 +57,15 @@ export const ROLE_PERMISSIONS = {
   warehouse: ['dashboard', 'inventory'],
 } as const
 
+export const MODULE_PERMISSION_CODES = {
+  dashboard: [],
+  inventory: ['INVENTORY_VIEW', 'INVENTORY_MANAGE'],
+  users: ['USERS_MANAGE', 'ROLES_MANAGE'],
+  clients: ['CLIENTS_VIEW', 'CLIENTS_MANAGE'],
+  reports: ['REPORTS_VIEW', 'REPORTS_EXPORT'],
+  fel: ['ORDERS_VIEW', 'ORDERS_PRINT', 'ORDERS_PDF'],
+} as const
+
 export const PRODUCT_CATEGORIES = [
   'Bebidas',
   'Snacks',

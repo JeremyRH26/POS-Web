@@ -19,46 +19,113 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
-import { ROLE_PERMISSIONS } from '@/config'
-import type { User, UserRole } from '@/types'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
+import type { UpsertUserPayload } from '@/lib/api'
+
+export const ROLE_OPTIONS = [
+  { roleId: 1, roleName: 'Super administrador' },
+  { roleId: 2, roleName: 'Prevendedor' },
+  { roleId: 3, roleName: 'Repartidor' },
+  { roleId: 4, roleName: 'Bodega' },
+] as const
+
+const ROLE_PERMISSION_CODES: Record<number, string[]> = {
+  1: [
+    'USERS_MANAGE',
+    'ROLES_MANAGE',
+    'ORDERS_CREATE',
+    'ORDERS_VIEW',
+    'ORDERS_UPDATE',
+    'ORDERS_PRINT',
+    'ORDERS_PDF',
+    'INVENTORY_VIEW',
+    'INVENTORY_MANAGE',
+    'CLIENTS_VIEW',
+    'CLIENTS_MANAGE',
+    'REPORTS_VIEW',
+    'REPORTS_EXPORT',
+    'SYSTEM_SETTINGS',
+  ],
+  2: [
+    'ORDERS_CREATE',
+    'ORDERS_VIEW',
+    'ORDERS_UPDATE',
+    'INVENTORY_VIEW',
+    'INVENTORY_MANAGE',
+    'CLIENTS_VIEW',
+    'CLIENTS_MANAGE',
+  ],
+  3: ['ORDERS_VIEW', 'ORDERS_PRINT', 'ORDERS_PDF'],
+  4: ['INVENTORY_VIEW', 'INVENTORY_MANAGE', 'REPORTS_VIEW', 'REPORTS_EXPORT'],
+}
+
+const PERMISSION_LABELS: Record<string, string> = {
+  USERS_MANAGE: 'Administrar Usuarios',
+  ROLES_MANAGE: 'Administrar Roles',
+  ORDERS_CREATE: 'Crear Órdenes',
+  ORDERS_VIEW: 'Ver Órdenes',
+  ORDERS_UPDATE: 'Editar Órdenes',
+  ORDERS_PRINT: 'Imprimir Documentos',
+  ORDERS_PDF: 'Generar Pdf Entrega',
+  INVENTORY_VIEW: 'Ver Inventario',
+  INVENTORY_MANAGE: 'Gestionar Inventario',
+  CLIENTS_VIEW: 'Ver Clientes',
+  CLIENTS_MANAGE: 'Gestionar Clientes',
+  REPORTS_VIEW: 'Ver Reportes',
+  REPORTS_EXPORT: 'Exportar Reportes',
+  SYSTEM_SETTINGS: 'Configuración Sistema',
+}
+
+function permissionLabel(code: string): string {
+  return PERMISSION_LABELS[code] ?? code
+}
+
+export type UserDialogModel = {
+  id: string
+  fullName: string
+  username: string
+  phoneNumber: string | null
+  roleId: number
+  roleName: string
+  userStatus: number
+}
 
 interface UserDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  user: User | null
-  onSave: (user: Partial<User>) => void
-}
-
-const roleLabels: Record<UserRole, string> = {
-  admin: 'Administrador',
-  manager: 'Gerente',
-  sales: 'Ventas',
-  warehouse: 'Bodega',
+  user: UserDialogModel | null
+  onSave: (user: UpsertUserPayload) => Promise<void>
 }
 
 export function UserDialog({ open, onOpenChange, user, onSave }: UserDialogProps) {
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    role: 'sales' as UserRole,
+    fullName: '',
+    username: '',
+    phoneNumber: '',
+    roleId: 2,
+    userStatus: 1,
     password: '',
   })
+  const [isSaving, setIsSaving] = useState(false)
 
   useEffect(() => {
     if (user) {
       setFormData({
-        name: user.name,
-        email: user.email,
-        role: user.role,
+        fullName: user.fullName,
+        username: user.username,
+        phoneNumber: user.phoneNumber ?? '',
+        roleId: user.roleId,
+        userStatus: user.userStatus,
         password: '',
       })
     } else {
       setFormData({
-        name: '',
-        email: '',
-        role: 'sales',
+        fullName: '',
+        username: '',
+        phoneNumber: '',
+        roleId: 2,
+        userStatus: 1,
         password: '',
       })
     }
@@ -67,8 +134,8 @@ export function UserDialog({ open, onOpenChange, user, onSave }: UserDialogProps
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!formData.name || !formData.email) {
-      toast.error('El nombre y correo son requeridos')
+    if (!formData.fullName || !formData.username) {
+      toast.error('El nombre y usuario son requeridos')
       return
     }
 
@@ -77,14 +144,18 @@ export function UserDialog({ open, onOpenChange, user, onSave }: UserDialogProps
       return
     }
 
-    onSave({
-      name: formData.name,
-      email: formData.email,
-      role: formData.role,
-    })
+    setIsSaving(true)
+    void onSave({
+      fullName: formData.fullName.trim(),
+      username: formData.username.trim(),
+      phoneNumber: formData.phoneNumber.trim() || null,
+      roleId: Number(formData.roleId),
+      userStatus: Number(formData.userStatus),
+      password: formData.password || undefined,
+    }).finally(() => setIsSaving(false))
   }
 
-  const currentPermissions = ROLE_PERMISSIONS[formData.role]
+  const currentPermissions = ROLE_PERMISSION_CODES[Number(formData.roleId)] ?? []
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -101,23 +172,37 @@ export function UserDialog({ open, onOpenChange, user, onSave }: UserDialogProps
         <form onSubmit={handleSubmit}>
           <FieldGroup className="py-4">
             <Field>
-              <FieldLabel htmlFor="name">Nombre Completo *</FieldLabel>
+              <FieldLabel htmlFor="fullName">Nombre Completo *</FieldLabel>
               <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                id="fullName"
+                value={formData.fullName}
+                onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                 placeholder="Juan Pérez"
+                disabled={isSaving}
               />
             </Field>
 
             <Field>
-              <FieldLabel htmlFor="email">Correo Electrónico *</FieldLabel>
+              <FieldLabel htmlFor="username">Usuario *</FieldLabel>
               <Input
-                id="email"
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                placeholder="usuario@exponencial.com"
+                id="username"
+                type="text"
+                value={formData.username}
+                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                placeholder="administrador"
+                disabled={isSaving}
+              />
+            </Field>
+
+            <Field>
+              <FieldLabel htmlFor="phoneNumber">Teléfono</FieldLabel>
+              <Input
+                id="phoneNumber"
+                type="text"
+                value={formData.phoneNumber}
+                onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
+                placeholder="50050055"
+                disabled={isSaving}
               />
             </Field>
 
@@ -132,6 +217,7 @@ export function UserDialog({ open, onOpenChange, user, onSave }: UserDialogProps
                     setFormData({ ...formData, password: e.target.value })
                   }
                   placeholder="Mínimo 8 caracteres"
+                  disabled={isSaving}
                 />
               </Field>
             )}
@@ -139,23 +225,45 @@ export function UserDialog({ open, onOpenChange, user, onSave }: UserDialogProps
             <Field>
               <FieldLabel htmlFor="role">Rol</FieldLabel>
               <Select
-                value={formData.role}
+                value={String(formData.roleId)}
                 onValueChange={(value) =>
-                  setFormData({ ...formData, role: value as UserRole })
+                  setFormData({ ...formData, roleId: Number(value) })
                 }
+                disabled={isSaving}
               >
                 <SelectTrigger id="role">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {(Object.keys(roleLabels) as UserRole[]).map((role) => (
-                    <SelectItem key={role} value={role}>
-                      {roleLabels[role]}
+                  {ROLE_OPTIONS.map((role) => (
+                    <SelectItem key={role.roleId} value={String(role.roleId)}>
+                      {role.roleName}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </Field>
+
+            {user && (
+              <Field>
+                <FieldLabel htmlFor="status">Estado</FieldLabel>
+                <Select
+                  value={String(formData.userStatus)}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, userStatus: Number(value) })
+                  }
+                  disabled={isSaving}
+                >
+                  <SelectTrigger id="status">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">Activo</SelectItem>
+                    <SelectItem value="0">Inactivo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+            )}
 
             <div>
               <p className="text-sm font-medium text-foreground mb-2">
@@ -164,7 +272,7 @@ export function UserDialog({ open, onOpenChange, user, onSave }: UserDialogProps
               <div className="flex flex-wrap gap-2 p-3 rounded-lg bg-muted/50">
                 {currentPermissions.map((perm) => (
                   <Badge key={perm} variant="secondary">
-                    {perm}
+                    {permissionLabel(perm)}
                   </Badge>
                 ))}
               </div>
@@ -179,10 +287,11 @@ export function UserDialog({ open, onOpenChange, user, onSave }: UserDialogProps
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
+              disabled={isSaving}
             >
               Cancelar
             </Button>
-            <Button type="submit">
+            <Button type="submit" disabled={isSaving}>
               {user ? 'Guardar Cambios' : 'Crear Usuario'}
             </Button>
           </DialogFooter>
