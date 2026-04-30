@@ -45,6 +45,7 @@ export const useAuthStore = create<AuthState>()(
               email: data.user.username,
               name: data.user.fullName,
               role: mappedRole,
+              roleName: data.user.roleName,
               avatar: undefined,
               createdAt: new Date(),
               updatedAt: new Date(),

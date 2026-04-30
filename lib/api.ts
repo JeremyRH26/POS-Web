@@ -119,6 +119,28 @@ export async function updateUserRequest(
   return body.data
 }
 
+export async function changeUserPasswordRequest(
+  token: string,
+  userId: string,
+  password: string
+): Promise<void> {
+  const res = await fetch(`${apiBase}/users/${userId}/password`, {
+    method: 'PATCH',
+    headers: authHeaders(token),
+    body: JSON.stringify({ password }),
+  })
+  if (!res.ok) {
+    let message = 'No se pudo cambiar la contraseña'
+    try {
+      const body = (await res.json()) as Envelope<null>
+      if (body?.message) message = body.message
+    } catch {
+      // Ignore non-JSON responses.
+    }
+    throw new Error(message)
+  }
+}
+
 export async function deleteUserRequest(token: string, userId: string): Promise<void> {
   const res = await fetch(`${apiBase}/users/${userId}`, {
     method: 'DELETE',

@@ -84,7 +84,7 @@ export function LoginForm() {
                     onChange={(e) => setPassword(e.target.value)}
                     disabled={isLoading}
                     autoComplete="current-password"
-                    className="pr-10"
+                    className="no-native-password-toggle pr-10"
                   />
                   <Button
                     type="button"

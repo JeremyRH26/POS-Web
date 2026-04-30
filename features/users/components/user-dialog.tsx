@@ -22,6 +22,7 @@ import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import type { UpsertUserPayload } from '@/lib/api'
+import { Eye, EyeOff } from 'lucide-react'
 
 export const ROLE_OPTIONS = [
   { roleId: 1, roleName: 'Super administrador' },
@@ -108,6 +109,7 @@ export function UserDialog({ open, onOpenChange, user, onSave }: UserDialogProps
     password: '',
   })
   const [isSaving, setIsSaving] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   useEffect(() => {
     if (user) {
@@ -159,7 +161,7 @@ export function UserDialog({ open, onOpenChange, user, onSave }: UserDialogProps
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="w-[95vw] max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>{user ? 'Editar Usuario' : 'Nuevo Usuario'}</DialogTitle>
           <DialogDescription>
@@ -169,7 +171,7 @@ export function UserDialog({ open, onOpenChange, user, onSave }: UserDialogProps
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} className="pb-1">
           <FieldGroup className="py-4">
             <Field>
               <FieldLabel htmlFor="fullName">Nombre Completo *</FieldLabel>
@@ -206,21 +208,41 @@ export function UserDialog({ open, onOpenChange, user, onSave }: UserDialogProps
               />
             </Field>
 
-            {!user && (
-              <Field>
-                <FieldLabel htmlFor="password">Contraseña *</FieldLabel>
+            <Field>
+              <FieldLabel htmlFor="password">
+                {user ? 'Nueva Contraseña (Opcional)' : 'Contraseña *'}
+              </FieldLabel>
+              <div className="relative">
                 <Input
                   id="password"
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   value={formData.password}
                   onChange={(e) =>
                     setFormData({ ...formData, password: e.target.value })
                   }
-                  placeholder="Mínimo 8 caracteres"
+                  placeholder={user ? 'Dejar en blanco para no cambiar' : 'Mínimo 8 caracteres'}
                   disabled={isSaving}
+                  className="no-native-password-toggle pr-10"
                 />
-              </Field>
-            )}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                  onClick={() => setShowPassword(!showPassword)}
+                  disabled={isSaving}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <Eye className="h-4 w-4 text-muted-foreground" />
+                  )}
+                  <span className="sr-only">
+                    {showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                  </span>
+                </Button>
+              </div>
+            </Field>
 
             <Field>
               <FieldLabel htmlFor="role">Rol</FieldLabel>

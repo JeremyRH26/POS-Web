@@ -18,6 +18,7 @@ import { formatDate } from '@/utils/format'
 import { Plus, Search, Pencil, Trash2, Shield, Users } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
 import {
+  changeUserPasswordRequest,
   createUserRequest,
   deleteUserRequest,
   listUsersRequest,
@@ -103,6 +104,9 @@ export function UsersContent() {
     try {
       if (selectedUser) {
         await updateUserRequest(token, selectedUser.id, userData)
+        if (userData.password && userData.password.trim().length > 0) {
+          await changeUserPasswordRequest(token, selectedUser.id, userData.password)
+        }
         toast.success('Usuario actualizado')
       } else {
         await createUserRequest(token, userData)

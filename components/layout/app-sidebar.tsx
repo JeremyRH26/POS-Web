@@ -1,9 +1,11 @@
 'use client'
 
+import { useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuthStore } from '@/stores/auth-store'
 import { NAVIGATION_ITEMS, APP_CONFIG } from '@/config'
+import { Button } from '@/components/ui/button'
 import {
   Sidebar,
   SidebarContent,
@@ -15,15 +17,8 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from '@/components/ui/sidebar'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
   LayoutDashboard,
@@ -33,8 +28,6 @@ import {
   FileBarChart,
   FileText,
   LogOut,
-  Settings,
-  ChevronUp,
   TrendingUp,
 } from 'lucide-react'
 
@@ -50,7 +43,14 @@ const iconMap = {
 export function AppSidebar() {
   const pathname = usePathname()
   const router = useRouter()
+  const { isMobile, setOpenMobile } = useSidebar()
   const { user, logout, hasPermission } = useAuthStore()
+
+  useEffect(() => {
+    if (isMobile) {
+      setOpenMobile(false)
+    }
+  }, [pathname, isMobile, setOpenMobile])
 
   const handleLogout = () => {
     logout()
@@ -71,7 +71,7 @@ export function AppSidebar() {
   )
 
   return (
-    <Sidebar className="border-r-0">
+    <Sidebar className="border-r-0 h-dvh">
       <SidebarHeader className="border-b border-sidebar-border p-4">
         <Link href="/dashboard" className="flex items-center gap-3">
           <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-sidebar-primary">
@@ -108,7 +108,12 @@ export function AppSidebar() {
                       isActive={isActive}
                       className="transition-colors"
                     >
-                      <Link href={item.href}>
+                      <Link
+                        href={item.href}
+                        onClick={() => {
+                          if (isMobile) setOpenMobile(false)
+                        }}
+                      >
                         <Icon className="w-4 h-4" />
                         <span>{item.name}</span>
                       </Link>
@@ -121,48 +126,43 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-sidebar-border">
+      <SidebarFooter className="mt-auto border-t border-sidebar-border bg-sidebar pb-[max(env(safe-area-inset-bottom),0.5rem)]">
         <SidebarMenu>
           <SidebarMenuItem>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <SidebarMenuButton className="h-auto py-3">
-                  <Avatar className="h-8 w-8">
-                    <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground text-xs">
-                      {user ? getInitials(user.name) : 'U'}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex flex-col items-start flex-1 min-w-0">
-                    <span className="text-sm font-medium truncate text-sidebar-foreground">
-                      {user?.name || 'Usuario'}
-                    </span>
-                    <span className="text-xs text-sidebar-foreground/60 truncate">
-                      {user?.email || 'email@example.com'}
-                    </span>
-                  </div>
-                  <ChevronUp className="w-4 h-4 text-sidebar-foreground/60" />
-                </SidebarMenuButton>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                side="top"
-                className="w-[--radix-popper-anchor-width]"
+            <div className="flex items-center gap-2 rounded-md px-2 py-3">
+              <Avatar className="h-8 w-8">
+                <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground text-xs">
+                  {user ? getInitials(user.name) : 'U'}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex min-w-0 flex-1 flex-col items-start gap-0.5">
+                <span className="w-full truncate text-sm font-medium text-sidebar-foreground">
+                  {user?.name || 'Usuario'}
+                </span>
+                <span className="w-full truncate text-[11px] leading-tight text-sidebar-foreground/55">
+                  {user?.roleName ||
+                    (user?.role === 'admin'
+                      ? 'Super administrador'
+                      : user?.role === 'sales'
+                        ? 'Prevendedor'
+                        : user?.role === 'warehouse'
+                          ? 'Bodega'
+                          : user?.role === 'manager'
+                            ? 'Gerente'
+                            : '')}
+                </span>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={handleLogout}
+                className="h-8 w-8 text-destructive hover:text-destructive"
+                title="Cerrar Sesión"
               >
-                <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem>
-                  <Settings className="mr-2 h-4 w-4" />
-                  Configuración
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={handleLogout}
-                  className="text-destructive focus:text-destructive"
-                >
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Cerrar Sesión
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </div>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
