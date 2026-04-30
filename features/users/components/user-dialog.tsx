@@ -105,7 +105,6 @@ export function UserDialog({ open, onOpenChange, user, onSave }: UserDialogProps
     username: '',
     phoneNumber: '',
     roleId: 2,
-    userStatus: 1,
     password: '',
   })
   const [isSaving, setIsSaving] = useState(false)
@@ -118,7 +117,6 @@ export function UserDialog({ open, onOpenChange, user, onSave }: UserDialogProps
         username: user.username,
         phoneNumber: user.phoneNumber ?? '',
         roleId: user.roleId,
-        userStatus: user.userStatus,
         password: '',
       })
     } else {
@@ -127,7 +125,6 @@ export function UserDialog({ open, onOpenChange, user, onSave }: UserDialogProps
         username: '',
         phoneNumber: '',
         roleId: 2,
-        userStatus: 1,
         password: '',
       })
     }
@@ -152,7 +149,7 @@ export function UserDialog({ open, onOpenChange, user, onSave }: UserDialogProps
       username: formData.username.trim(),
       phoneNumber: formData.phoneNumber.trim() || null,
       roleId: Number(formData.roleId),
-      userStatus: Number(formData.userStatus),
+      userStatus: user ? user.userStatus : 1,
       password: formData.password || undefined,
     }).finally(() => setIsSaving(false))
   }
@@ -265,27 +262,6 @@ export function UserDialog({ open, onOpenChange, user, onSave }: UserDialogProps
                 </SelectContent>
               </Select>
             </Field>
-
-            {user && (
-              <Field>
-                <FieldLabel htmlFor="status">Estado</FieldLabel>
-                <Select
-                  value={String(formData.userStatus)}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, userStatus: Number(value) })
-                  }
-                  disabled={isSaving}
-                >
-                  <SelectTrigger id="status">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1">Activo</SelectItem>
-                    <SelectItem value="0">Inactivo</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
-            )}
 
             <div>
               <p className="text-sm font-medium text-foreground mb-2">

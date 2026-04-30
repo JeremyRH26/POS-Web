@@ -29,6 +29,7 @@ import {
 import { ROLE_OPTIONS, UserDialog, type UserDialogModel } from './user-dialog'
 import { toast } from 'sonner'
 import { Spinner } from '@/components/ui/spinner'
+import { Switch } from '@/components/ui/switch'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -49,6 +50,7 @@ const roleColors: Record<number, string> = {
 
 export function UsersContent() {
   const token = useAuthStore((s) => s.token)
+  const currentUserId = useAuthStore((s) => s.user?.id ?? null)
   const [users, setUsers] = useState<BackendUser[]>([])
   const [search, setSearch] = useState('')
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -56,6 +58,7 @@ export function UsersContent() {
   const [userToDelete, setUserToDelete] = useState<BackendUser | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [statusToggleUserId, setStatusToggleUserId] = useState<string | null>(null)
 
   const loadUsers = useCallback(async () => {
     if (!token) return
@@ -117,6 +120,33 @@ export function UsersContent() {
       setSelectedUser(null)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'No se pudo guardar')
+    }
+  }
+
+  const handleToggleActive = async (user: BackendUser, nextStatus: 0 | 1) => {
+    if (!token) {
+      toast.error('Sesión inválida')
+      return
+    }
+    if (String(user.id) === String(currentUserId)) {
+      toast.error('Para cambiar tu propio estado usa el botón Editar')
+      return
+    }
+    setStatusToggleUserId(user.id)
+    try {
+      await updateUserRequest(token, user.id, {
+        fullName: user.fullName,
+        username: user.username,
+        phoneNumber: user.phoneNumber,
+        roleId: user.roleId,
+        userStatus: nextStatus,
+      })
+      toast.success(nextStatus === 1 ? 'Usuario activado' : 'Usuario desactivado')
+      await loadUsers()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudo actualizar el estado')
+    } finally {
+      setStatusToggleUserId(null)
     }
   }
 
@@ -268,9 +298,31 @@ export function UsersContent() {
                       </p>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={user.userStatus === 1 ? 'default' : 'secondary'}>
-                        {user.userStatus === 1 ? 'Activo' : 'Inactivo'}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={user.userStatus === 1}
+                          disabled={
+                            statusToggleUserId === user.id ||
+                            String(user.id) === String(currentUserId)
+                          }
+                          onCheckedChange={(checked) => {
+                            const next = checked ? 1 : 0
+                            const current = user.userStatus === 1 ? 1 : 0
+                            if (next === current) return
+                            void handleToggleActive(user, next)
+                          }}
+                          title={
+                            String(user.id) === String(currentUserId)
+                              ? 'Tu estado solo desde Editar'
+                              : user.userStatus === 1
+                                ? 'Desactivar usuario'
+                                : 'Activar usuario'
+                          }
+                        />
+                        <span className="text-sm text-muted-foreground">
+                          {user.userStatus === 1 ? 'Activo' : 'Inactivo'}
+                        </span>
+                      </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {formatDate(user.createdAt)}

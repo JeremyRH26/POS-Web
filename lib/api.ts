@@ -1,11 +1,30 @@
-const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
-const cleanApiUrl = rawApiUrl.replace(/\/$/, '')
-const apiBase = cleanApiUrl.endsWith('/api') ? cleanApiUrl : `${cleanApiUrl}/api`
+import { notifySessionInvalid } from '@/lib/unauthorized-bridge'
 
 type Envelope<T> = {
   status: number
   message: string
   data: T
+}
+
+const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+const cleanApiUrl = rawApiUrl.replace(/\/$/, '')
+const apiBase = cleanApiUrl.endsWith('/api') ? cleanApiUrl : `${cleanApiUrl}/api`
+
+/** Respuesta 401 con Bearer: revoca sesión en cliente (misma lógica que app móvil: cerrar sesión al leer 401). */
+async function throwIfSessionUnauthorized(
+  res: Response,
+  fallbackMessage = 'Sesión no válida o cuenta desactivada'
+): Promise<void> {
+  if (res.status !== 401) return
+  notifySessionInvalid()
+  let message = fallbackMessage
+  try {
+    const body = (await res.json()) as Envelope<unknown>
+    if (body?.message && typeof body.message === 'string') message = body.message
+  } catch {
+    // respuesta vacía o no JSON
+  }
+  throw new Error(message)
 }
 
 export type BackendUser = {
@@ -65,11 +84,31 @@ function authHeaders(token: string) {
   }
 }
 
+/** Valida token + usuario activo en BD (mismo middleware que el resto de rutas). */
+export async function validateSessionRequest(token: string): Promise<void> {
+  const res = await fetch(`${apiBase}/users/me`, {
+    method: 'GET',
+    headers: authHeaders(token),
+  })
+  await throwIfSessionUnauthorized(res)
+  if (!res.ok) {
+    let message = 'No se pudo validar la sesión'
+    try {
+      const body = (await res.json()) as Envelope<unknown>
+      if (body?.message && typeof body.message === 'string') message = body.message
+    } catch {
+      // ignore
+    }
+    throw new Error(message)
+  }
+}
+
 export async function listUsersRequest(token: string): Promise<BackendUser[]> {
   const res = await fetch(`${apiBase}/users?includeInactive=1`, {
     method: 'GET',
     headers: authHeaders(token),
   })
+  await throwIfSessionUnauthorized(res)
   const body = (await res.json()) as Envelope<BackendUser[]>
   if (!res.ok) {
     throw new Error(body?.message || 'No se pudo cargar usuarios')
@@ -89,6 +128,7 @@ export async function createUserRequest(token: string, payload: UpsertUserPayloa
       roleId: payload.roleId,
     }),
   })
+  await throwIfSessionUnauthorized(res)
   const body = (await res.json()) as Envelope<BackendUser>
   if (!res.ok) {
     throw new Error(body?.message || 'No se pudo crear el usuario')
@@ -112,6 +152,7 @@ export async function updateUserRequest(
       userStatus: payload.userStatus ?? 1,
     }),
   })
+  await throwIfSessionUnauthorized(res)
   const body = (await res.json()) as Envelope<BackendUser>
   if (!res.ok) {
     throw new Error(body?.message || 'No se pudo actualizar el usuario')
@@ -129,6 +170,7 @@ export async function changeUserPasswordRequest(
     headers: authHeaders(token),
     body: JSON.stringify({ password }),
   })
+  await throwIfSessionUnauthorized(res, 'Sesión no válida o cuenta desactivada')
   if (!res.ok) {
     let message = 'No se pudo cambiar la contraseña'
     try {
@@ -146,6 +188,7 @@ export async function deleteUserRequest(token: string, userId: string): Promise<
     method: 'DELETE',
     headers: authHeaders(token),
   })
+  await throwIfSessionUnauthorized(res)
   if (!res.ok && res.status !== 204) {
     let message = 'No se pudo eliminar el usuario'
     try {
