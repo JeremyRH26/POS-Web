@@ -129,16 +129,8 @@ export function LoginForm() {
             </p>
             <div className="grid gap-2 text-xs">
               <div className="flex justify-between items-center p-2 rounded-md bg-muted/50">
-                <span className="text-muted-foreground">Admin:</span>
-                <code className="text-foreground">admin@exponencial.com / admin123</code>
-              </div>
-              <div className="flex justify-between items-center p-2 rounded-md bg-muted/50">
-                <span className="text-muted-foreground">Gerente:</span>
-                <code className="text-foreground">manager@exponencial.com / manager123</code>
-              </div>
-              <div className="flex justify-between items-center p-2 rounded-md bg-muted/50">
-                <span className="text-muted-foreground">Ventas:</span>
-                <code className="text-foreground">sales@exponencial.com / sales123</code>
+                <span className="text-muted-foreground">POS-API:</span>
+                <code className="text-foreground">admin@test.com / password123</code>
               </div>
             </div>
           </div>

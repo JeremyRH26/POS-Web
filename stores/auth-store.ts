@@ -4,9 +4,11 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { User, UserRole } from '@/types'
 import { ROLE_PERMISSIONS } from '@/config'
+import { apiClient } from '@/lib/api-client'
 
 interface AuthState {
   user: User | null
+  token: string | null
   isAuthenticated: boolean
   isLoading: boolean
   login: (email: string, password: string) => Promise<boolean>
@@ -14,78 +16,72 @@ interface AuthState {
   hasPermission: (module: string) => boolean
 }
 
-// Mock users for demonstration
-const MOCK_USERS: Record<string, { password: string; user: User }> = {
-  'admin@exponencial.com': {
-    password: 'admin123',
-    user: {
-      id: '1',
-      email: 'admin@exponencial.com',
-      name: 'Administrador',
-      role: 'admin',
-      avatar: undefined,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      permissions: [],
-    },
-  },
-  'manager@exponencial.com': {
-    password: 'manager123',
-    user: {
-      id: '2',
-      email: 'manager@exponencial.com',
-      name: 'Gerente de Ventas',
-      role: 'manager',
-      avatar: undefined,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      permissions: [],
-    },
-  },
-  'sales@exponencial.com': {
-    password: 'sales123',
-    user: {
-      id: '3',
-      email: 'sales@exponencial.com',
-      name: 'Vendedor',
-      role: 'sales',
-      avatar: undefined,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      permissions: [],
-    },
-  },
+interface LoginResponse {
+  token: string
+  tokenType: string
+  expiresIn: string
+  user: {
+    id: string
+    email: string
+    role: string
+  }
+}
+
+const allowedRoles: UserRole[] = ['admin', 'manager', 'sales', 'warehouse']
+
+function mapRole(role: string): UserRole {
+  return allowedRoles.includes(role as UserRole) ? (role as UserRole) : 'warehouse'
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
       user: null,
+      token: null,
       isAuthenticated: false,
       isLoading: false,
 
       login: async (email: string, password: string) => {
-        set({ isLoading: true })
+        try {
+          set({ isLoading: true })
+          const data = await apiClient.post<LoginResponse>('/users/login', {
+            email,
+            password,
+          })
 
-        // Simulate API delay
-        await new Promise((resolve) => setTimeout(resolve, 1000))
-
-        const mockUser = MOCK_USERS[email.toLowerCase()]
-        if (mockUser && mockUser.password === password) {
+          const role = mapRole(data.user.role)
+          const now = new Date()
           set({
-            user: mockUser.user,
+            token: data.token,
+            user: {
+              id: data.user.id,
+              email: data.user.email,
+              name: data.user.email.split('@')[0],
+              role,
+              avatar: undefined,
+              createdAt: now,
+              updatedAt: now,
+              permissions: [],
+            },
             isAuthenticated: true,
             isLoading: false,
           })
-          return true
-        }
 
-        set({ isLoading: false })
-        return false
+          return true
+        } catch {
+          set({
+            token: null,
+            user: null,
+            isAuthenticated: false,
+            isLoading: false,
+          })
+          return false
+        }
       },
 
       logout: () => {
         set({
+          token: null,
           user: null,
           isAuthenticated: false,
         })

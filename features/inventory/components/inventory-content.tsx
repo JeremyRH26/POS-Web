@@ -1,7 +1,7 @@
 'use client'
 
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { mockProducts } from '@/lib/mock-data'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { PRODUCT_CATEGORIES } from '@/config'
-import { Plus, Search, Filter } from 'lucide-react'
+import { Plus, Search, Filter, Pencil, Trash2 } from 'lucide-react'
 import { ProductCard } from './product-card'
 import { ProductTable } from './product-table'
 import { ProductDialog } from './product-dialog'
@@ -26,9 +26,45 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import type { Product } from '@/types'
+import { apiClient, ApiError } from '@/lib/api-client'
+import { useAuthStore } from '@/stores/auth-store'
+import { toast } from 'sonner'
+
+interface CategoryItem {
+  id: string
+  name: string
+  description: string
+}
+
+function normalizeCategory(item: unknown, index: number): CategoryItem {
+  if (item && typeof item === 'object') {
+    const row = item as Record<string, unknown>
+    const id = String(row.category_id ?? row.id ?? index + 1)
+    const name = String(row.category_name ?? row.name ?? 'Sin nombre')
+    const description = String(row.description ?? row.details ?? '')
+    return { id, name, description }
+  }
+
+  return {
+    id: String(index + 1),
+    name: String(item ?? 'Sin nombre'),
+    description: '',
+  }
+}
 
 export function InventoryContent() {
+  const { token } = useAuthStore()
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
   const [stockFilter, setStockFilter] = useState<string>('all')
@@ -36,6 +72,19 @@ export function InventoryContent() {
   const [isCategoriesDialogOpen, setIsCategoriesDialogOpen] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [products, setProducts] = useState(mockProducts)
+  const [categories, setCategories] = useState<CategoryItem[]>([])
+  const [isLoadingCategories, setIsLoadingCategories] = useState(false)
+  const [categoriesError, setCategoriesError] = useState<string | null>(null)
+  const [isCreateCategoryOpen, setIsCreateCategoryOpen] = useState(false)
+  const [newCategoryName, setNewCategoryName] = useState('')
+  const [newCategoryDescription, setNewCategoryDescription] = useState('')
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false)
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null)
+  const [editCategoryName, setEditCategoryName] = useState('')
+  const [editCategoryDescription, setEditCategoryDescription] = useState('')
+  const [isSavingCategory, setIsSavingCategory] = useState(false)
+  const [categoryToDelete, setCategoryToDelete] = useState<CategoryItem | null>(null)
+  const [isDeletingCategory, setIsDeletingCategory] = useState(false)
 
   const filteredProducts = useMemo(() => {
     return products.filter((product) => {
@@ -100,6 +149,141 @@ export function InventoryContent() {
   const handleDelete = (productId: string) => {
     setProducts((prev) => prev.filter((p) => p.id !== productId))
   }
+
+  const loadCategories = async () => {
+    if (!token) {
+      setCategories([])
+      setCategoriesError('No hay sesión activa para consultar categorías.')
+      return
+    }
+
+    try {
+      setIsLoadingCategories(true)
+      setCategoriesError(null)
+      const response = await apiClient.get<unknown[]>('/inventory/categories', {
+        token,
+      })
+      const normalized = Array.isArray(response)
+        ? response.map((item, index) => normalizeCategory(item, index))
+        : []
+      setCategories(normalized)
+    } catch (error) {
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : 'No se pudo cargar las categorías.'
+      setCategories([])
+      setCategoriesError(message)
+    } finally {
+      setIsLoadingCategories(false)
+    }
+  }
+
+  const startEditCategory = (category: CategoryItem) => {
+    setEditingCategoryId(category.id)
+    setEditCategoryName(category.name)
+    setEditCategoryDescription(category.description)
+  }
+
+  const cancelEditCategory = () => {
+    setEditingCategoryId(null)
+    setEditCategoryName('')
+    setEditCategoryDescription('')
+  }
+
+  const handleSaveCategory = async () => {
+    const name = editCategoryName.trim()
+    const description = editCategoryDescription.trim()
+
+    if (!editingCategoryId) return
+    if (!name) {
+      toast.error('El nombre de la categoría es requerido')
+      return
+    }
+    if (!token) {
+      toast.error('No hay sesión activa')
+      return
+    }
+
+    try {
+      setIsSavingCategory(true)
+      await apiClient.put(
+        `/inventory/categories/${encodeURIComponent(editingCategoryId)}`,
+        { name, description },
+        { token }
+      )
+      toast.success('Categoría actualizada')
+      cancelEditCategory()
+      await loadCategories()
+    } catch (error) {
+      const message =
+        error instanceof ApiError ? error.message : 'No se pudo actualizar la categoría'
+      toast.error(message)
+    } finally {
+      setIsSavingCategory(false)
+    }
+  }
+
+  const handleConfirmDeleteCategory = async () => {
+    if (!categoryToDelete || !token) {
+      toast.error('No hay sesión activa')
+      return
+    }
+
+    try {
+      setIsDeletingCategory(true)
+      await apiClient.delete(
+        `/inventory/categories/${encodeURIComponent(categoryToDelete.id)}`,
+        { token }
+      )
+      toast.success('Categoría eliminada')
+      setCategoryToDelete(null)
+      await loadCategories()
+    } catch (error) {
+      const message =
+        error instanceof ApiError ? error.message : 'No se pudo eliminar la categoría'
+      toast.error(message)
+    } finally {
+      setIsDeletingCategory(false)
+    }
+  }
+
+  const handleCreateCategory = async () => {
+    const name = newCategoryName.trim()
+    const description = newCategoryDescription.trim()
+
+    if (!name) {
+      toast.error('El nombre de la categoría es requerido')
+      return
+    }
+
+    if (!token) {
+      toast.error('No hay sesión activa')
+      return
+    }
+
+    try {
+      setIsCreatingCategory(true)
+      await apiClient.post('/inventory/create_category', { name, description }, { token })
+      toast.success('Categoría creada')
+      setNewCategoryName('')
+      setNewCategoryDescription('')
+      setIsCreateCategoryOpen(false)
+      await loadCategories()
+    } catch (error) {
+      const message =
+        error instanceof ApiError ? error.message : 'No se pudo crear la categoría'
+      toast.error(message)
+    } finally {
+      setIsCreatingCategory(false)
+    }
+  }
+
+  useEffect(() => {
+    if (isCategoriesDialogOpen) {
+      loadCategories()
+    }
+  }, [isCategoriesDialogOpen])
 
   const lowStockCount = products.filter((p) => p.stock <= p.minStock).length
 
@@ -227,18 +411,194 @@ export function InventoryContent() {
               Lista de categorias disponibles para inventario.
             </DialogDescription>
           </DialogHeader>
-          <ul className="mt-3 space-y-2">
-            {PRODUCT_CATEGORIES.map((category) => (
-              <li
-                key={category}
-                className="rounded-md border px-3 py-2 text-sm"
+          <div className="mt-3 space-y-3">
+            <div className="flex justify-between">
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => setIsCreateCategoryOpen((prev) => !prev)}
               >
-                {category}
-              </li>
-            ))}
-          </ul>
+                <Plus className="w-4 h-4 mr-2" />
+                Crear Categoria
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={loadCategories}
+                disabled={isLoadingCategories}
+              >
+                {isLoadingCategories ? 'Cargando...' : 'Recargar'}
+              </Button>
+            </div>
+
+            {isCreateCategoryOpen && (
+              <div className="rounded-md border p-3 space-y-3">
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Nombre</label>
+                  <Input
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    placeholder="Ej: Bebidas"
+                    disabled={isCreatingCategory}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Descripcion</label>
+                  <Input
+                    value={newCategoryDescription}
+                    onChange={(e) => setNewCategoryDescription(e.target.value)}
+                    placeholder="Ej: Productos para consumo"
+                    disabled={isCreatingCategory}
+                  />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsCreateCategoryOpen(false)}
+                    disabled={isCreatingCategory}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleCreateCategory}
+                    disabled={isCreatingCategory}
+                  >
+                    {isCreatingCategory ? 'Guardando...' : 'Guardar Categoria'}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {categoriesError && (
+              <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {categoriesError}
+              </p>
+            )}
+
+            {!categoriesError && categories.length === 0 && !isLoadingCategories && (
+              <p className="text-sm text-muted-foreground">
+                No se recibieron categorías desde la API.
+              </p>
+            )}
+
+            <ul className="space-y-2 max-h-80 overflow-auto">
+              {categories.map((category) => (
+                <li
+                  key={category.id}
+                  className="rounded-md border px-3 py-2"
+                >
+                  {editingCategoryId === category.id ? (
+                    <div className="space-y-3">
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">Nombre</label>
+                        <Input
+                          value={editCategoryName}
+                          onChange={(e) => setEditCategoryName(e.target.value)}
+                          disabled={isSavingCategory}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">Descripcion</label>
+                        <Input
+                          value={editCategoryDescription}
+                          onChange={(e) => setEditCategoryDescription(e.target.value)}
+                          disabled={isSavingCategory}
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={cancelEditCategory}
+                          disabled={isSavingCategory}
+                        >
+                          Cancelar
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={handleSaveCategory}
+                          disabled={isSavingCategory}
+                        >
+                          {isSavingCategory ? 'Guardando...' : 'Guardar'}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-foreground">{category.name}</p>
+                        {category.description && (
+                          <p className="mt-1 text-xs text-muted-foreground">{category.description}</p>
+                        )}
+                        <p className="mt-1 text-[11px] text-muted-foreground/80">ID: {category.id}</p>
+                      </div>
+                      <div className="flex shrink-0 gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => startEditCategory(category)}
+                          disabled={!!editingCategoryId && editingCategoryId !== category.id}
+                          aria-label="Editar categoría"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          onClick={() => setCategoryToDelete(category)}
+                          disabled={!!editingCategoryId}
+                          aria-label="Eliminar categoría"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={!!categoryToDelete}
+        onOpenChange={(open) => {
+          if (!open) setCategoryToDelete(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar categoría</AlertDialogTitle>
+            <AlertDialogDescription>
+              {categoryToDelete
+                ? `¿Eliminar "${categoryToDelete.name}"? Esta acción no se puede deshacer.`
+                : ''}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingCategory}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => {
+                e.preventDefault()
+                void handleConfirmDeleteCategory()
+              }}
+              disabled={isDeletingCategory}
+            >
+              {isDeletingCategory ? 'Eliminando...' : 'Eliminar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
