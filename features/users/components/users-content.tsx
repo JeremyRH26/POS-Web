@@ -15,7 +15,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { formatDate } from '@/utils/format'
-import { Plus, Search, Pencil, Trash2, Shield, Users } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Shield, Users, KeyRound } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
 import {
   changeUserPasswordRequest,
@@ -27,6 +27,7 @@ import {
   type UpsertUserPayload,
 } from '@/lib/api'
 import { ROLE_OPTIONS, UserDialog, type UserDialogModel } from './user-dialog'
+import { RolesManagementDialog } from './roles-management-dialog'
 import { toast } from 'sonner'
 import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
@@ -50,7 +51,9 @@ const roleColors: Record<number, string> = {
 
 export function UsersContent() {
   const token = useAuthStore((s) => s.token)
+  const permissionCodes = useAuthStore((s) => s.permissionCodes)
   const currentUserId = useAuthStore((s) => s.user?.id ?? null)
+  const canManageRoles = permissionCodes.includes('ROLES_MANAGE')
   const [users, setUsers] = useState<BackendUser[]>([])
   const [search, setSearch] = useState('')
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -59,6 +62,7 @@ export function UsersContent() {
   const [isDeleting, setIsDeleting] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [statusToggleUserId, setStatusToggleUserId] = useState<string | null>(null)
+  const [rolesDialogOpen, setRolesDialogOpen] = useState(false)
 
   const loadUsers = useCallback(async () => {
     if (!token) return
@@ -194,10 +198,18 @@ export function UsersContent() {
             Gestiona los usuarios y permisos del sistema
           </p>
         </div>
-        <Button onClick={handleCreate}>
-          <Plus className="w-4 h-4 mr-2" />
-          Nuevo Usuario
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {canManageRoles ? (
+            <Button variant="outline" onClick={() => setRolesDialogOpen(true)}>
+              <KeyRound className="w-4 h-4 mr-2" />
+              Roles y permisos
+            </Button>
+          ) : null}
+          <Button onClick={handleCreate}>
+            <Plus className="w-4 h-4 mr-2" />
+            Nuevo Usuario
+          </Button>
+        </div>
       </div>
 
       {/* Role Summary Cards */}
@@ -356,6 +368,12 @@ export function UsersContent() {
           </Table>
         </CardContent>
       </Card>
+
+      <RolesManagementDialog
+        open={rolesDialogOpen}
+        onOpenChange={setRolesDialogOpen}
+        token={token}
+      />
 
       <UserDialog
         open={isDialogOpen}

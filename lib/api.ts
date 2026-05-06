@@ -183,6 +183,84 @@ export async function changeUserPasswordRequest(
   }
 }
 
+export type CatalogRole = {
+  roleId: number
+  name: string
+  description: string
+}
+
+export type CatalogPermission = {
+  permissionId: number
+  code: string
+  name: string
+  description: string
+}
+
+export type RoleWithPermissionsResponse = {
+  role: CatalogRole
+  permissions: CatalogPermission[]
+}
+
+export async function listRolesCatalogRequest(token: string): Promise<CatalogRole[]> {
+  const res = await fetch(`${apiBase}/roles`, {
+    method: 'GET',
+    headers: authHeaders(token),
+  })
+  await throwIfSessionUnauthorized(res)
+  const body = (await res.json()) as Envelope<CatalogRole[]>
+  if (!res.ok) {
+    throw new Error(body?.message || 'No se pudo cargar roles')
+  }
+  return body.data
+}
+
+export async function listPermissionsCatalogRequest(token: string): Promise<CatalogPermission[]> {
+  const res = await fetch(`${apiBase}/roles/permissions`, {
+    method: 'GET',
+    headers: authHeaders(token),
+  })
+  await throwIfSessionUnauthorized(res)
+  const body = (await res.json()) as Envelope<CatalogPermission[]>
+  if (!res.ok) {
+    throw new Error(body?.message || 'No se pudo cargar permisos')
+  }
+  return body.data
+}
+
+export async function getRolePermissionsRequest(
+  token: string,
+  roleId: number
+): Promise<RoleWithPermissionsResponse> {
+  const res = await fetch(`${apiBase}/roles/${roleId}/permissions`, {
+    method: 'GET',
+    headers: authHeaders(token),
+  })
+  await throwIfSessionUnauthorized(res)
+  const body = (await res.json()) as Envelope<RoleWithPermissionsResponse>
+  if (!res.ok) {
+    throw new Error(body?.message || 'No se pudo cargar permisos del rol')
+  }
+  return body.data
+}
+
+export async function updateRolePermissionsRequest(
+  token: string,
+  roleId: number,
+  permissionCodes: string[]
+): Promise<RoleWithPermissionsResponse> {
+  const res = await fetch(`${apiBase}/roles/${roleId}/permissions`, {
+    method: 'PUT',
+    headers: authHeaders(token),
+    body: JSON.stringify({ permissionCodes }),
+  })
+  await throwIfSessionUnauthorized(res)
+  const body = (await res.json()) as Envelope<RoleWithPermissionsResponse>
+  if (!res.ok) {
+    throw new Error(body?.message || 'No se pudo guardar permisos del rol')
+  }
+  return body.data
+}
+
 export async function deleteUserRequest(token: string, userId: string): Promise<void> {
   const res = await fetch(`${apiBase}/users/${userId}`, {
     method: 'DELETE',
