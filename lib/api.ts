@@ -51,6 +51,8 @@ export type UpsertUserPayload = {
 
 export type LoginData = {
   token: string
+  /** Renovar sesión sin contraseña mientras sea válido (típ. 30 días). */
+  refreshToken?: string
   tokenType: string
   expiresIn: string
   user: {
@@ -84,12 +86,58 @@ function authHeaders(token: string) {
   }
 }
 
-/** Valida token + usuario activo en BD (mismo middleware que el resto de rutas). */
-export async function validateSessionRequest(token: string): Promise<void> {
-  const res = await fetch(`${apiBase}/users/me`, {
-    method: 'GET',
-    headers: authHeaders(token),
+export type RefreshTokenPayload = {
+  token: string
+  refreshToken: string
+}
+
+export async function refreshSessionRequest(refreshToken: string): Promise<RefreshTokenPayload> {
+  const res = await fetch(`${apiBase}/users/refresh`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ refreshToken }),
   })
+  const body = (await res.json()) as Envelope<RefreshTokenPayload & { expiresIn?: string }>
+  if (!res.ok) {
+    throw new Error(body?.message || 'No se pudo renovar la sesión')
+  }
+  if (
+    typeof body.data?.token !== 'string' ||
+    typeof body.data?.refreshToken !== 'string'
+  ) {
+    throw new Error('Respuesta inválida al renovar la sesión')
+  }
+  return { token: body.data.token, refreshToken: body.data.refreshToken }
+}
+
+export type ValidateSessionOptions = {
+  refreshToken: string | null
+  onTokenRefreshed: (tokens: RefreshTokenPayload) => void
+}
+
+/** Valida token + usuario activo en BD; con refresh opcional reintenta si el access JWT caducó. */
+export async function validateSessionRequest(
+  token: string,
+  options?: ValidateSessionOptions,
+): Promise<void> {
+  const fetchMe = (accessToken: string) =>
+    fetch(`${apiBase}/users/me`, {
+      method: 'GET',
+      headers: authHeaders(accessToken),
+    })
+
+  let res = await fetchMe(token)
+
+  if (res.status === 401 && options?.refreshToken) {
+    try {
+      const pair = await refreshSessionRequest(options.refreshToken)
+      options.onTokenRefreshed(pair)
+      res = await fetchMe(pair.token)
+    } catch {
+      await throwIfSessionUnauthorized(res)
+    }
+  }
+
   await throwIfSessionUnauthorized(res)
   if (!res.ok) {
     let message = 'No se pudo validar la sesión'

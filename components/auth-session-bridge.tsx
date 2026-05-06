@@ -11,6 +11,7 @@ const POLL_MS = 45_000
 export function AuthSessionBridge() {
   const logout = useAuthStore((s) => s.logout)
   const token = useAuthStore((s) => s.token)
+  const refreshToken = useAuthStore((s) => s.refreshToken)
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
 
   useEffect(() => {
@@ -22,7 +23,15 @@ export function AuthSessionBridge() {
     if (!token || !isAuthenticated) return
 
     const run = () => {
-      void validateSessionRequest(token).catch(() => {
+      void validateSessionRequest(token, {
+        refreshToken,
+        onTokenRefreshed: (pair) => {
+          useAuthStore.setState({
+            token: pair.token,
+            refreshToken: pair.refreshToken,
+          })
+        },
+      }).catch(() => {
         /* 401 → notifySessionInvalid + logout; otros errores (red) no cierran sesión */
       })
     }
@@ -37,7 +46,7 @@ export function AuthSessionBridge() {
       window.clearInterval(interval)
       document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [token, isAuthenticated])
+  }, [token, refreshToken, isAuthenticated])
 
   return null
 }

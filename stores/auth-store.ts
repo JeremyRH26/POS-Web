@@ -9,6 +9,7 @@ import { loginRequest } from '@/lib/api'
 interface AuthState {
   user: User | null
   token: string | null
+  refreshToken: string | null
   permissionCodes: string[]
   isAuthenticated: boolean
   isLoading: boolean
@@ -22,6 +23,7 @@ export const useAuthStore = create<AuthState>()(
     (set, get) => ({
       user: null,
       token: null,
+      refreshToken: null,
       permissionCodes: [],
       isAuthenticated: false,
       isLoading: false,
@@ -52,6 +54,7 @@ export const useAuthStore = create<AuthState>()(
               permissions: [],
             },
             token: data.token,
+            refreshToken: data.refreshToken ?? null,
             permissionCodes: data.user.permissions ?? [],
             isAuthenticated: true,
             isLoading: false,
@@ -67,6 +70,7 @@ export const useAuthStore = create<AuthState>()(
         set({
           user: null,
           token: null,
+          refreshToken: null,
           permissionCodes: [],
           isAuthenticated: false,
         })
