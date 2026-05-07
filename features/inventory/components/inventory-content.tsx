@@ -2,7 +2,6 @@
 
 
 import { useEffect, useMemo, useState } from 'react'
-import { mockProducts } from '@/lib/mock-data'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -13,7 +12,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { PRODUCT_CATEGORIES } from '@/config'
-import { Plus, Search, Filter, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Search, Filter, Pencil, Trash2, TriangleAlert } from 'lucide-react'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { ProductCard } from './product-card'
 import { ProductTable } from './product-table'
 import { ProductDialog } from './product-dialog'
@@ -47,6 +47,10 @@ interface CategoryItem {
   description: string
 }
 
+interface ProductApiItem {
+  [key: string]: unknown
+}
+
 function normalizeCategory(item: unknown, index: number): CategoryItem {
   if (item && typeof item === 'object') {
     const row = item as Record<string, unknown>
@@ -63,6 +67,35 @@ function normalizeCategory(item: unknown, index: number): CategoryItem {
   }
 }
 
+function parseDate(value: unknown): Date {
+  if (value instanceof Date) return value
+  if (typeof value === 'string' || typeof value === 'number') {
+    const date = new Date(value)
+    if (!Number.isNaN(date.getTime())) return date
+  }
+  return new Date()
+}
+
+function normalizeProduct(item: unknown, index: number): Product {
+  const row = (item && typeof item === 'object' ? item : {}) as ProductApiItem
+  return {
+    id: String(row.id ?? row.product_id ?? index + 1),
+    sku: String(row.sku ?? row.code ?? row.codigo ?? ''),
+    name: String(row.name ?? row.product_name ?? row.nombre ?? 'Sin nombre'),
+    description: String(row.description ?? row.details ?? ''),
+    category: String(row.category_name ?? row.category ?? row.categoria ?? 'Sin categoria'),
+    price: Number(row.price ?? row.sale ?? row.sale_price ?? 0),
+    cost: Number(row.cost ?? row.purchase_cost ?? 0),
+    stock: Number(row.stock ?? row.quantity ?? 0),
+    minStock: Number(row.min_stock ?? row.minStock ?? 0),
+    image: String(row.image ?? row.url ?? ''),
+    discount: Number(row.discount ?? 0),
+    unit: String(row.unit ?? 'unidad'),
+    createdAt: parseDate(row.created_at ?? row.create ?? row.createdAt),
+    updatedAt: parseDate(row.updated_at ?? row.update ?? row.updatedAt),
+  }
+}
+
 export function InventoryContent() {
   const { token } = useAuthStore()
   const [search, setSearch] = useState('')
@@ -71,7 +104,9 @@ export function InventoryContent() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isCategoriesDialogOpen, setIsCategoriesDialogOpen] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
-  const [products, setProducts] = useState(mockProducts)
+  const [products, setProducts] = useState<Product[]>([])
+  const [isLoadingProducts, setIsLoadingProducts] = useState(false)
+  const [productsError, setProductsError] = useState<string | null>(null)
   const [categories, setCategories] = useState<CategoryItem[]>([])
   const [isLoadingCategories, setIsLoadingCategories] = useState(false)
   const [categoriesError, setCategoriesError] = useState<string | null>(null)
@@ -116,14 +151,12 @@ export function InventoryContent() {
 
   const handleSave = (productData: Partial<Product>) => {
     if (selectedProduct) {
-      // Update existing product
       setProducts((prev) =>
         prev.map((p) =>
           p.id === selectedProduct.id ? { ...p, ...productData, updatedAt: new Date() } : p
         )
       )
     } else {
-      // Create new product
       const newProduct: Product = {
         id: String(Date.now()),
         sku: productData.sku || `SKU-${Date.now()}`,
@@ -148,6 +181,31 @@ export function InventoryContent() {
 
   const handleDelete = (productId: string) => {
     setProducts((prev) => prev.filter((p) => p.id !== productId))
+  }
+
+  const loadProducts = async () => {
+    if (!token) {
+      setProducts([])
+      setProductsError('No hay sesión activa para consultar productos.')
+      return
+    }
+
+    try {
+      setIsLoadingProducts(true)
+      setProductsError(null)
+      const response = await apiClient.get<unknown[]>('/inventory/products', { token })
+      const normalized = Array.isArray(response)
+        ? response.map((item, index) => normalizeProduct(item, index))
+        : []
+      setProducts(normalized)
+    } catch (error) {
+      const message =
+        error instanceof ApiError ? error.message : 'No se pudo cargar los productos.'
+      setProducts([])
+      setProductsError(message)
+    } finally {
+      setIsLoadingProducts(false)
+    }
   }
 
   const loadCategories = async () => {
@@ -285,6 +343,10 @@ export function InventoryContent() {
     }
   }, [isCategoriesDialogOpen])
 
+  useEffect(() => {
+    void loadProducts()
+  }, [token])
+
   const lowStockCount = products.filter((p) => p.stock <= p.minStock).length
 
   return (
@@ -312,6 +374,21 @@ export function InventoryContent() {
           </Button>
         </div>
       </div>
+
+      {lowStockCount > 0 && !isLoadingProducts && !productsError && (
+        <Alert
+          className="border-warning/50 bg-warning/10 text-foreground [&>svg]:text-warning"
+          role="alert"
+        >
+          <TriangleAlert className="size-4" aria-hidden />
+          <AlertTitle>Atención: stock bajo</AlertTitle>
+          <AlertDescription className="text-foreground/90">
+            {lowStockCount === 1
+              ? 'Hay 1 producto con stock igual o menor que su mínimo (stock ≤ mínimo). Revisa el inventario o usa el filtro «Stock Bajo».'
+              : `Hay ${lowStockCount} productos con stock igual o menor que su mínimo (stock ≤ mínimo). Revisa el inventario o usa el filtro «Stock Bajo».`}
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
@@ -366,7 +443,16 @@ export function InventoryContent() {
         </TabsList>
 
         <TabsContent value="grid">
-          {filteredProducts.length === 0 ? (
+          {productsError && (
+            <p className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {productsError}
+            </p>
+          )}
+          {isLoadingProducts ? (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">Cargando productos...</p>
+            </div>
+          ) : filteredProducts.length === 0 ? (
             <div className="text-center py-12">
               <p className="text-muted-foreground">No se encontraron productos</p>
             </div>
