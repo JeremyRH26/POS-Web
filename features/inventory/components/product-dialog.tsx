@@ -291,29 +291,17 @@ export function ProductDialog({
                 />
               </Field>*/}
             </div>
-          <div className="grid grid-cols-2 gap-4">
             <Field>
-              <FieldLabel htmlFor="unit">Unidad de Medida</FieldLabel>
+              <FieldLabel htmlFor="image">URL de Imagen</FieldLabel>
               <Input
-                id="unit"
-                value={formData.unit}
-                onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                placeholder="Ejem: Docena"
+                id="image"
+                value={formData.image}
+                onChange={(e) =>
+                  setFormData({ ...formData, image: e.target.value })
+                }
+                placeholder="https://..."
               />
             </Field>
-
-              <Field>
-                <FieldLabel htmlFor="image">URL de Imagen</FieldLabel>
-                <Input
-                  id="image"
-                  value={formData.image}
-                  onChange={(e) =>
-                    setFormData({ ...formData, image: e.target.value })
-                  }
-                  placeholder="https://..."
-                />
-              </Field>
-            </div>
           </div>
 
           <DialogFooter>

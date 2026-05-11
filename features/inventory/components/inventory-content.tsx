@@ -145,6 +145,7 @@ export function InventoryContent() {
   const [stockFilter, setStockFilter] = useState<string>('all')
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isCategoriesDialogOpen, setIsCategoriesDialogOpen] = useState(false)
+  const [isUnidadMedidaDialogOpen, setIsUnidadMedidaDialogOpen] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [products, setProducts] = useState<Product[]>([])
   const [isLoadingProducts, setIsLoadingProducts] = useState(false)
@@ -461,6 +462,12 @@ export function InventoryContent() {
   }, [isCategoriesDialogOpen])
 
   useEffect(() => {
+    if (isUnidadMedidaDialogOpen) {
+      void loadProducts()
+    }
+  }, [isUnidadMedidaDialogOpen])
+
+  useEffect(() => {
     void loadProducts()
   }, [token])
 
@@ -484,12 +491,19 @@ export function InventoryContent() {
             )}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
             onClick={() => setIsCategoriesDialogOpen(true)}
           >
             Ver categorias
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setIsUnidadMedidaDialogOpen(true)}
+          >
+            Unidad de medida
           </Button>
           <Button onClick={handleCreate}>
             <Plus className="w-4 h-4 mr-2" />
@@ -775,6 +789,73 @@ export function InventoryContent() {
                 </li>
               ))}
             </ul>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isUnidadMedidaDialogOpen} onOpenChange={setIsUnidadMedidaDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col gap-3">
+          <DialogHeader>
+            <DialogTitle>Unidad de medida</DialogTitle>
+            <DialogDescription>
+              Productos registrados en inventario (lista desde el servidor, mismo origen que la
+              pantalla principal).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex shrink-0 justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void loadProducts()}
+              disabled={isLoadingProducts}
+            >
+              {isLoadingProducts ? 'Cargando...' : 'Recargar'}
+            </Button>
+          </div>
+          {productsError && (
+            <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {productsError}
+            </p>
+          )}
+          <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
+            {isLoadingProducts && !products.length ? (
+              <p className="p-6 text-center text-sm text-muted-foreground">Cargando productos...</p>
+            ) : (
+              <div className="max-h-[min(55vh,420px)] overflow-auto">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 z-[1] border-b bg-muted/95 backdrop-blur supports-[backdrop-filter]:bg-muted/80">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-medium">ID</th>
+                      <th className="px-3 py-2 text-left font-medium">Código</th>
+                      <th className="px-3 py-2 text-left font-medium">Nombre</th>
+                      <th className="px-3 py-2 text-left font-medium">Categoría</th>
+                      <th className="px-3 py-2 text-right font-medium">Stock</th>
+                      <th className="px-3 py-2 text-left font-medium">Unidad</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {products.map((product) => (
+                      <tr key={product.id} className="border-b border-border/60 last:border-0">
+                        <td className="px-3 py-2 text-muted-foreground tabular-nums">{product.id}</td>
+                        <td className="px-3 py-2 font-mono text-xs">{product.sku}</td>
+                        <td className="px-3 py-2">{product.name}</td>
+                        <td className="px-3 py-2 text-muted-foreground">{product.category}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{product.stock}</td>
+                        <td className="px-3 py-2 text-muted-foreground">
+                          {product.unit?.trim() ? product.unit : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {!isLoadingProducts && products.length === 0 && !productsError && (
+                  <p className="p-6 text-center text-sm text-muted-foreground">
+                    No hay productos en inventario.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
