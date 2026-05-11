@@ -1,7 +1,7 @@
 'use client'
 
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -16,7 +16,7 @@ import { Plus, Search, Filter, Pencil, Trash2, TriangleAlert } from 'lucide-reac
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { ProductCard } from './product-card'
 import { ProductTable } from './product-table'
-import { ProductDialog } from './product-dialog'
+import { ProductDialog, type ProductFormData } from './product-dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { LayoutGrid, List } from 'lucide-react'
 import {
@@ -76,19 +76,61 @@ function parseDate(value: unknown): Date {
   return new Date()
 }
 
+function toSqlDateTime(value: Date) {
+  const pad = (part: number) => String(part).padStart(2, '0')
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())} ${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}`
+}
+
+function toNumber(value: unknown, fallback = 0) {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : fallback
+  }
+  if (typeof value === 'string') {
+    const normalized = value.replace(/[^\d.-]/g, '')
+    const parsed = Number(normalized)
+    return Number.isFinite(parsed) ? parsed : fallback
+  }
+  return fallback
+}
+
 function normalizeProduct(item: unknown, index: number): Product {
   const row = (item && typeof item === 'object' ? item : {}) as ProductApiItem
   return {
-    id: String(row.id ?? row.product_id ?? index + 1),
-    sku: String(row.sku ?? row.code ?? row.codigo ?? ''),
+    id: String(row.id_product ?? row.product_id ?? row.id ?? index + 1),
+    sku: String(
+      row.sku ??
+        row.code ??
+        row.codigo ??
+        row.product_code ??
+        row.cod_producto ??
+        row.codigo_producto ??
+        row.cod ??
+        ''
+    ),
     name: String(row.name ?? row.product_name ?? row.nombre ?? 'Sin nombre'),
     description: String(row.description ?? row.details ?? ''),
     category: String(row.category_name ?? row.category ?? row.categoria ?? 'Sin categoria'),
-    price: Number(row.price ?? row.sale ?? row.sale_price ?? 0),
-    cost: Number(row.cost ?? row.purchase_cost ?? 0),
+    price: toNumber(row.price ?? row.sale ?? row.sale_price ?? row.precio_venta ?? 0),
+    cost: toNumber(
+      row.cost ??
+        row.purchase_cost ??
+        row.precio_costo ??
+        row.costo ??
+        row.cost_price ??
+        row.precioCosto ??
+        0
+    ),
+    expiration: String(
+      row.expiration ??
+        row.expiration_date ??
+        row.expiry_date ??
+        row.fecha_vencimiento ??
+        row.vencimiento ??
+        ''
+    ),
     stock: Number(row.stock ?? row.quantity ?? 0),
     minStock: Number(row.min_stock ?? row.minStock ?? 0),
-    image: String(row.image ?? row.url ?? ''),
+    image: String(row.image ?? row.url ?? row.imagen ?? ''),
     discount: Number(row.discount ?? 0),
     unit: String(row.unit ?? 'unidad'),
     createdAt: parseDate(row.created_at ?? row.create ?? row.createdAt),
@@ -120,6 +162,10 @@ export function InventoryContent() {
   const [isSavingCategory, setIsSavingCategory] = useState(false)
   const [categoryToDelete, setCategoryToDelete] = useState<CategoryItem | null>(null)
   const [isDeletingCategory, setIsDeletingCategory] = useState(false)
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null)
+  const [isDeletingProduct, setIsDeletingProduct] = useState(false)
+  const productDeleteInFlightRef = useRef(false)
+  const categoryDeleteInFlightRef = useRef(false)
 
   const filteredProducts = useMemo(() => {
     return products.filter((product) => {
@@ -149,38 +195,103 @@ export function InventoryContent() {
     setIsDialogOpen(true)
   }
 
-  const handleSave = (productData: Partial<Product>) => {
-    if (selectedProduct) {
-      setProducts((prev) =>
-        prev.map((p) =>
-          p.id === selectedProduct.id ? { ...p, ...productData, updatedAt: new Date() } : p
-        )
-      )
-    } else {
-      const newProduct: Product = {
-        id: String(Date.now()),
-        sku: productData.sku || `SKU-${Date.now()}`,
-        name: productData.name || '',
-        description: productData.description || '',
-        category: productData.category || 'Otros',
-        price: productData.price || 0,
-        cost: productData.cost || 0,
-        stock: productData.stock || 0,
-        minStock: productData.minStock || 10,
-        image: productData.image,
-        discount: productData.discount || 0,
-        unit: productData.unit || 'unidad',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }
-      setProducts((prev) => [newProduct, ...prev])
+  const handleSave = async (productData: ProductFormData) => {
+    if (!token) {
+      toast.error('No hay sesión activa')
+      return
     }
-    setIsDialogOpen(false)
-    setSelectedProduct(null)
+
+    const selectedCategory = categories.find((cat) => cat.name === productData.category)
+    const categoryId = selectedCategory?.id ?? null
+    const now = new Date()
+    const nowSql = toSqlDateTime(now)
+    const expiration = productData.expiration
+      ? `${productData.expiration} 00:00:00`
+      : null
+
+    try {
+      const payload = {
+        code: selectedProduct ? selectedProduct.sku : productData.sku,
+        name: productData.name,
+        url: productData.image || null,
+        sale: productData.price,
+        cost: productData.cost,
+        expiration,
+        category_id: categoryId,
+        created_at: nowSql,
+        updated_at: nowSql,
+        stock: productData.stock,
+        min_stock: productData.minStock,
+        st_update: nowSql,
+      }
+
+      if (selectedProduct) {
+        await apiClient.put(
+          `/inventory/products/${encodeURIComponent(selectedProduct.id)}`,
+          payload,
+          { token }
+        )
+        setIsDialogOpen(false)
+        setSelectedProduct(null)
+        await loadProducts()
+        return
+      } else {
+        await apiClient.post('/inventory/products', payload, { token })
+      }
+
+      await loadProducts()
+      setIsDialogOpen(false)
+      setSelectedProduct(null)
+    } catch (error) {
+      const message =
+        error instanceof ApiError ? error.message : 'No se pudo guardar el producto.'
+      toast.error(message)
+    }
   }
 
   const handleDelete = (productId: string) => {
-    setProducts((prev) => prev.filter((p) => p.id !== productId))
+    const product = products.find((p) => p.id === productId)
+    if (!product) {
+      toast.error('No se encontró el producto.')
+      return
+    }
+    setProductToDelete(product)
+  }
+
+  const handleConfirmDeleteProduct = async () => {
+    const target = productToDelete
+    if (!target || !token) {
+      toast.error('No hay sesión activa')
+      return
+    }
+    if (productDeleteInFlightRef.current) return
+    productDeleteInFlightRef.current = true
+
+    const idToDelete = target.id
+
+    try {
+      setIsDeletingProduct(true)
+      await apiClient.delete(
+        `/inventory/products/${encodeURIComponent(idToDelete)}`,
+        { token }
+      )
+      toast.success('Producto eliminado')
+      if (selectedProduct?.id === idToDelete) {
+        setIsDialogOpen(false)
+        setSelectedProduct(null)
+      }
+      setProductToDelete(null)
+    } catch (error) {
+      const message =
+        error instanceof ApiError ? error.message : 'No se pudo eliminar el producto.'
+      toast.error(message)
+    } finally {
+      productDeleteInFlightRef.current = false
+      setIsDeletingProduct(false)
+      if (token) {
+        await loadProducts()
+      }
+    }
   }
 
   const loadProducts = async () => {
@@ -283,15 +394,20 @@ export function InventoryContent() {
   }
 
   const handleConfirmDeleteCategory = async () => {
-    if (!categoryToDelete || !token) {
+    const target = categoryToDelete
+    if (!target || !token) {
       toast.error('No hay sesión activa')
       return
     }
+    if (categoryDeleteInFlightRef.current) return
+    categoryDeleteInFlightRef.current = true
+
+    const idToDelete = target.id
 
     try {
       setIsDeletingCategory(true)
       await apiClient.delete(
-        `/inventory/categories/${encodeURIComponent(categoryToDelete.id)}`,
+        `/inventory/categories/${encodeURIComponent(idToDelete)}`,
         { token }
       )
       toast.success('Categoría eliminada')
@@ -302,6 +418,7 @@ export function InventoryContent() {
         error instanceof ApiError ? error.message : 'No se pudo eliminar la categoría'
       toast.error(message)
     } finally {
+      categoryDeleteInFlightRef.current = false
       setIsDeletingCategory(false)
     }
   }
@@ -347,6 +464,12 @@ export function InventoryContent() {
     void loadProducts()
   }, [token])
 
+  useEffect(() => {
+    if (token) {
+      void loadCategories()
+    }
+  }, [token])
+
   const lowStockCount = products.filter((p) => p.stock <= p.minStock).length
 
   return (
@@ -377,15 +500,15 @@ export function InventoryContent() {
 
       {lowStockCount > 0 && !isLoadingProducts && !productsError && (
         <Alert
-          className="border-warning/50 bg-warning/10 text-foreground [&>svg]:text-warning"
+          className="border-violet-300/70 bg-violet-100/70 text-violet-950 [&>svg]:text-violet-500"
           role="alert"
         >
           <TriangleAlert className="size-4" aria-hidden />
           <AlertTitle>Atención: stock bajo</AlertTitle>
           <AlertDescription className="text-foreground/90">
             {lowStockCount === 1
-              ? 'Hay 1 producto con stock igual o menor que su mínimo (stock ≤ mínimo). Revisa el inventario o usa el filtro «Stock Bajo».'
-              : `Hay ${lowStockCount} productos con stock igual o menor que su mínimo (stock ≤ mínimo). Revisa el inventario o usa el filtro «Stock Bajo».`}
+              ? 'Hay 1 o mas productos con stock bajo en el inventario <<Revisar inventario>>'
+              : `Hay ${lowStockCount} productos con stock igual o menor que su mínimo. Revisa el inventario o usa el filtro «Stock Bajo».`}
           </AlertDescription>
         </Alert>
       )}
@@ -483,6 +606,7 @@ export function InventoryContent() {
         open={isDialogOpen}
         onOpenChange={setIsDialogOpen}
         product={selectedProduct}
+        categories={categories}
         onSave={handleSave}
       />
 
@@ -674,13 +798,42 @@ export function InventoryContent() {
             <AlertDialogCancel disabled={isDeletingCategory}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={(e) => {
-                e.preventDefault()
+              onClick={() => {
                 void handleConfirmDeleteCategory()
               }}
               disabled={isDeletingCategory}
             >
               {isDeletingCategory ? 'Eliminando...' : 'Eliminar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={!!productToDelete}
+        onOpenChange={(open) => {
+          if (!open) setProductToDelete(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar producto</AlertDialogTitle>
+            <AlertDialogDescription>
+              {productToDelete
+                ? `¿Eliminar "${productToDelete.name}" (${productToDelete.sku})? Esta acción no se puede deshacer.`
+                : ''}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingProduct}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                void handleConfirmDeleteProduct()
+              }}
+              disabled={isDeletingProduct}
+            >
+              {isDeletingProduct ? 'Eliminando...' : 'Eliminar'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

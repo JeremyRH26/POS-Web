@@ -30,6 +30,7 @@ export interface Product {
   category: string
   price: number
   cost: number
+  expiration?: string
   stock: number
   minStock: number
   image?: string

@@ -11,7 +11,6 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
   SelectContent,
@@ -24,19 +23,48 @@ import { PRODUCT_CATEGORIES } from '@/config'
 import type { Product } from '@/types'
 import { toast } from 'sonner'
 
+interface CategoryOption {
+  id: string
+  name: string
+}
+
+export interface ProductFormData {
+  sku: string
+  name: string
+  description: string
+  category: string
+  price: number
+  cost: number
+  stock: number
+  minStock: number
+  discount: number
+  unit: string
+  image: string
+  expiration: string
+}
+
 interface ProductDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   product: Product | null
-  onSave: (product: Partial<Product>) => void
+  categories: CategoryOption[]
+  onSave: (product: ProductFormData) => Promise<void> | void
 }
 
 export function ProductDialog({
   open,
   onOpenChange,
   product,
+  categories,
   onSave,
 }: ProductDialogProps) {
+  const toDateInputValue = (value?: string) => {
+    if (!value) return ''
+    if (value.includes('T')) return value.slice(0, 10)
+    if (value.includes(' ')) return value.slice(0, 10)
+    return value
+  }
+
   const [formData, setFormData] = useState({
     sku: '',
     name: '',
@@ -49,6 +77,7 @@ export function ProductDialog({
     discount: 0,
     unit: '',
     image: '',
+    expiration: '',
   })
 
   useEffect(() => {
@@ -65,6 +94,7 @@ export function ProductDialog({
         discount: product.discount || 0,
         unit: product.unit,
         image: product.image || '',
+        expiration: toDateInputValue(product.expiration),
       })
     } else {
       setFormData({
@@ -79,11 +109,17 @@ export function ProductDialog({
         discount: 0,
         unit: '',
         image: '',
+        expiration: '',
       })
     }
   }, [product, open])
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const categoryOptions =
+    categories.length > 0
+      ? categories.map((cat) => cat.name)
+      : PRODUCT_CATEGORIES
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     if (!formData.name || !formData.sku) {
@@ -96,7 +132,7 @@ export function ProductDialog({
       return
     }
 
-    onSave(formData)
+    await onSave(formData)
     toast.success(product ? 'Producto actualizado' : 'Producto creado')
   }
 
@@ -122,6 +158,7 @@ export function ProductDialog({
                 <Input
                   id="sku"
                   value={formData.sku}
+                  readOnly={!!product}
                   onChange={(e) =>
                     setFormData({ ...formData, sku: e.target.value.toUpperCase() })
                   }
@@ -140,7 +177,7 @@ export function ProductDialog({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {PRODUCT_CATEGORIES.map((cat) => (
+                    {categoryOptions.map((cat) => (
                       <SelectItem key={cat} value={cat}>
                         {cat}
                       </SelectItem>
@@ -176,6 +213,17 @@ export function ProductDialog({
             </Field>*/}
 
             <div className="grid grid-cols-2 gap-4">
+              <Field>
+                <FieldLabel htmlFor="expiration">Fecha de Vencimiento</FieldLabel>
+                <Input
+                  id="expiration"
+                  type="date"
+                  value={formData.expiration}
+                  onChange={(e) =>
+                    setFormData({ ...formData, expiration: e.target.value })
+                  }
+                />
+              </Field>
               <Field>
                 <FieldLabel htmlFor="price">Precio de Venta (Q)</FieldLabel>
                 <Input
