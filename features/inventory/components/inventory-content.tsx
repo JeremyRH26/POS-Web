@@ -165,6 +165,10 @@ export function InventoryContent() {
   const [isDeletingCategory, setIsDeletingCategory] = useState(false)
   const [productToDelete, setProductToDelete] = useState<Product | null>(null)
   const [isDeletingProduct, setIsDeletingProduct] = useState(false)
+  const [unitSellRows, setUnitSellRows] = useState<Record<string, { des: string; uni: string }>>(
+    {}
+  )
+  const [savingUnitSellId, setSavingUnitSellId] = useState<string | null>(null)
   const productDeleteInFlightRef = useRef(false)
   const categoryDeleteInFlightRef = useRef(false)
 
@@ -455,6 +459,44 @@ export function InventoryContent() {
     }
   }
 
+  const handleSaveUnitSell = async (product: Product) => {
+    if (!token) {
+      toast.error('No hay sesión activa')
+      return
+    }
+    const row = unitSellRows[product.id] ?? { des: '', uni: '' }
+    const des = row.des.trim()
+    const uniParsed = Number.parseInt(String(row.uni).trim(), 10)
+
+    if (!des) {
+      toast.error('Indica el valor en letras.')
+      return
+    }
+    if (!Number.isFinite(uniParsed)) {
+      toast.error('Indica el valor en números (entero).')
+      return
+    }
+
+    const id = Number.parseInt(String(product.id), 10)
+    if (!Number.isFinite(id) || !Number.isInteger(id)) {
+      toast.error('ID de producto no válido.')
+      return
+    }
+
+    setSavingUnitSellId(product.id)
+    try {
+      await apiClient.post('/inventory/unit-sell', { id, des, uni: uniParsed }, { token })
+      toast.success('Unidad de venta guardada.')
+      await loadProducts()
+    } catch (error) {
+      const message =
+        error instanceof ApiError ? error.message : 'No se pudo guardar la unidad de venta.'
+      toast.error(message)
+    } finally {
+      setSavingUnitSellId(null)
+    }
+  }
+
   useEffect(() => {
     if (isCategoriesDialogOpen) {
       loadCategories()
@@ -466,6 +508,18 @@ export function InventoryContent() {
       void loadProducts()
     }
   }, [isUnidadMedidaDialogOpen])
+
+  useEffect(() => {
+    if (!isUnidadMedidaDialogOpen) return
+    setUnitSellRows((prev) => {
+      const next: Record<string, { des: string; uni: string }> = {}
+      for (const p of products) {
+        const existing = prev[p.id]
+        next[p.id] = existing ?? { des: p.unit?.trim() ? p.unit : '', uni: '' }
+      }
+      return next
+    })
+  }, [isUnidadMedidaDialogOpen, products])
 
   useEffect(() => {
     void loadProducts()
@@ -794,68 +848,151 @@ export function InventoryContent() {
       </Dialog>
 
       <Dialog open={isUnidadMedidaDialogOpen} onOpenChange={setIsUnidadMedidaDialogOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col gap-3">
-          <DialogHeader>
-            <DialogTitle>Unidad de medida</DialogTitle>
-            <DialogDescription>
-              Productos registrados en inventario (lista desde el servidor, mismo origen que la
-              pantalla principal).
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex shrink-0 justify-end">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => void loadProducts()}
-              disabled={isLoadingProducts}
-            >
-              {isLoadingProducts ? 'Cargando...' : 'Recargar'}
-            </Button>
-          </div>
-          {productsError && (
-            <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              {productsError}
-            </p>
-          )}
-          <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
-            {isLoadingProducts && !products.length ? (
-              <p className="p-6 text-center text-sm text-muted-foreground">Cargando productos...</p>
-            ) : (
-              <div className="max-h-[min(55vh,420px)] overflow-auto">
-                <table className="w-full text-sm">
-                  <thead className="sticky top-0 z-[1] border-b bg-muted/95 backdrop-blur supports-[backdrop-filter]:bg-muted/80">
-                    <tr>
-                      <th className="px-3 py-2 text-left font-medium">ID</th>
-                      <th className="px-3 py-2 text-left font-medium">Código</th>
-                      <th className="px-3 py-2 text-left font-medium">Nombre</th>
-                      <th className="px-3 py-2 text-left font-medium">Categoría</th>
-                      <th className="px-3 py-2 text-right font-medium">Stock</th>
-                      <th className="px-3 py-2 text-left font-medium">Unidad</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {products.map((product) => (
-                      <tr key={product.id} className="border-b border-border/60 last:border-0">
-                        <td className="px-3 py-2 text-muted-foreground tabular-nums">{product.id}</td>
-                        <td className="px-3 py-2 font-mono text-xs">{product.sku}</td>
-                        <td className="px-3 py-2">{product.name}</td>
-                        <td className="px-3 py-2 text-muted-foreground">{product.category}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{product.stock}</td>
-                        <td className="px-3 py-2 text-muted-foreground">
-                          {product.unit?.trim() ? product.unit : '—'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {!isLoadingProducts && products.length === 0 && !productsError && (
-                  <p className="p-6 text-center text-sm text-muted-foreground">
-                    No hay productos en inventario.
-                  </p>
-                )}
+        <DialogContent className="flex h-[min(92vh,900px)] w-[min(96vw,1180px)] max-w-[min(96vw,1180px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(96vw,1180px)]">
+          <div className="shrink-0 border-b border-border/50 bg-muted/15 py-5 pl-6 pr-14">
+            <DialogHeader className="gap-0 space-y-0">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+                <div className="min-w-0 flex-1 space-y-2 pr-2">
+                  <DialogTitle className="text-xl font-semibold tracking-tight">
+                    Unidad de medida
+                  </DialogTitle>
+                  <DialogDescription className="text-sm leading-relaxed text-muted-foreground">
+                    Para cada producto indica la unidad de venta en letras y en números; al guardar
+                    se envía al servidor (unitsell) con el ID del producto.
+                  </DialogDescription>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0 self-start sm:mt-1"
+                  onClick={() => void loadProducts()}
+                  disabled={isLoadingProducts}
+                >
+                  {isLoadingProducts ? 'Cargando...' : 'Recargar'}
+                </Button>
               </div>
+            </DialogHeader>
+          </div>
+
+          <div className="flex min-h-0 flex-1 flex-col gap-3 px-6 pb-6 pt-4">
+            {productsError && (
+              <p className="shrink-0 rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {productsError}
+              </p>
             )}
+            <div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-border/40 bg-background shadow-sm">
+              {isLoadingProducts && !products.length ? (
+                <p className="p-8 text-center text-sm text-muted-foreground">
+                  Cargando productos...
+                </p>
+              ) : (
+                <div className="h-[min(58vh,560px)] overflow-auto">
+                  <table className="w-full min-w-[920px] text-[15px] leading-snug">
+                    <thead className="sticky top-0 z-[1] border-b border-border/50 bg-muted/90 backdrop-blur supports-[backdrop-filter]:bg-muted/75">
+                      <tr>
+                        <th className="px-4 py-3.5 text-left font-medium text-muted-foreground">
+                          ID
+                        </th>
+                        <th className="px-4 py-3.5 text-left font-medium text-muted-foreground">
+                          Código
+                        </th>
+                        <th className="px-4 py-3.5 text-left font-medium text-muted-foreground">
+                          Nombre
+                        </th>
+                        <th className="px-4 py-3.5 text-left font-medium text-muted-foreground">
+                          Categoría
+                        </th>
+                        <th className="px-4 py-3.5 text-right font-medium text-muted-foreground">
+                          Stock
+                        </th>
+                        <th className="px-4 py-3.5 text-left font-medium text-muted-foreground">
+                          Unidad actual
+                        </th>
+                        <th className="min-w-[160px] px-4 py-3.5 text-left font-medium text-muted-foreground">
+                          Valor en letras
+                        </th>
+                        <th className="w-[128px] px-4 py-3.5 text-left font-medium text-muted-foreground">
+                          Valor en números
+                        </th>
+                        <th className="w-[108px] px-4 py-3.5 text-right font-medium text-muted-foreground">
+                          {' '}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {products.map((product) => {
+                        const draft = unitSellRows[product.id] ?? { des: '', uni: '' }
+                        const isSavingThis = savingUnitSellId === product.id
+                        return (
+                          <tr
+                            key={product.id}
+                            className="border-b border-border/40 transition-colors last:border-0 hover:bg-muted/25"
+                          >
+                            <td className="px-4 py-3 text-muted-foreground tabular-nums">
+                              {product.id}
+                            </td>
+                            <td className="px-4 py-3 font-mono text-[13px]">{product.sku}</td>
+                            <td className="px-4 py-3">{product.name}</td>
+                            <td className="px-4 py-3 text-muted-foreground">{product.category}</td>
+                            <td className="px-4 py-3 text-right tabular-nums">{product.stock}</td>
+                            <td className="px-4 py-3 text-muted-foreground">
+                              {product.unit?.trim() ? product.unit : '—'}
+                            </td>
+                            <td className="px-4 py-3 align-middle">
+                              <Input
+                                value={draft.des}
+                                onChange={(e) =>
+                                  setUnitSellRows((prev) => ({
+                                    ...prev,
+                                    [product.id]: { ...draft, des: e.target.value },
+                                  }))
+                                }
+                                placeholder="Ej: docena"
+                                disabled={isSavingThis}
+                                className="h-9 text-[15px]"
+                              />
+                            </td>
+                            <td className="px-4 py-3 align-middle">
+                              <Input
+                                type="text"
+                                inputMode="numeric"
+                                value={draft.uni}
+                                onChange={(e) =>
+                                  setUnitSellRows((prev) => ({
+                                    ...prev,
+                                    [product.id]: { ...draft, uni: e.target.value },
+                                  }))
+                                }
+                                placeholder="Ej: 12"
+                                disabled={isSavingThis}
+                                className="h-9 text-[15px] tabular-nums"
+                              />
+                            </td>
+                            <td className="px-4 py-3 text-right align-middle">
+                              <Button
+                                type="button"
+                                size="sm"
+                                className="h-9 min-w-[5.5rem]"
+                                disabled={isSavingThis}
+                                onClick={() => void handleSaveUnitSell(product)}
+                              >
+                                {isSavingThis ? 'Guardando...' : 'Guardar'}
+                              </Button>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                  {!isLoadingProducts && products.length === 0 && !productsError && (
+                    <p className="p-8 text-center text-sm text-muted-foreground">
+                      No hay productos en inventario.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </DialogContent>
       </Dialog>
