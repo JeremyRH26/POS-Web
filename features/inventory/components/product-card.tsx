@@ -2,33 +2,36 @@
 
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { formatCurrency } from '@/utils/format'
 import type { Product } from '@/types'
-import { MoreVertical, Pencil, Trash2, Package } from 'lucide-react'
+import { Package } from 'lucide-react'
 
 interface ProductCardProps {
   product: Product
-  onEdit: (product: Product) => void
-  onDelete: (productId: string) => void
+  onViewDetail?: (product: Product) => void
 }
 
-export function ProductCard({ product, onEdit, onDelete }: ProductCardProps) {
+export function ProductCard({ product, onViewDetail }: ProductCardProps) {
   const isLowStock = product.stock <= product.minStock
   const hasDiscount = product.discount && product.discount > 0
-  const discountedPrice = hasDiscount
-    ? product.price * (1 - product.discount / 100)
-    : product.price
+
 
   return (
-    <Card className="group overflow-hidden border-border/50 hover:border-border transition-colors">
+    <Card
+      role={onViewDetail ? 'button' : undefined}
+      tabIndex={onViewDetail ? 0 : undefined}
+      className={`overflow-hidden border-border/50 transition-colors hover:border-border ${
+        onViewDetail ? 'cursor-pointer focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none' : ''
+      }`}
+      onClick={() => onViewDetail?.(product)}
+      onKeyDown={(e) => {
+        if (!onViewDetail) return
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onViewDetail(product)
+        }
+      }}
+    >
       <div className="relative aspect-square bg-muted/30 flex items-center justify-center">
         {product.image ? (
           <div
@@ -39,14 +42,12 @@ export function ProductCard({ product, onEdit, onDelete }: ProductCardProps) {
           <Package className="w-16 h-16 text-muted-foreground/30" />
         )}
 
-        {/* Discount Badge */}
         {hasDiscount && (
           <Badge className="absolute top-2 left-2 bg-destructive text-destructive-foreground">
             -{product.discount}%
           </Badge>
         )}
 
-        {/* Low Stock Badge */}
         {isLowStock && (
           <Badge
             variant="outline"
@@ -55,31 +56,6 @@ export function ProductCard({ product, onEdit, onDelete }: ProductCardProps) {
             Stock Bajo
           </Badge>
         )}
-
-        {/* Actions */}
-        <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="secondary" size="icon" className="h-8 w-8">
-                <MoreVertical className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => onEdit(product)}>
-                <Pencil className="mr-2 h-4 w-4" />
-                Editar
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => onDelete(product.id)}
-                className="text-destructive focus:text-destructive"
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Eliminar
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
       </div>
 
       <CardContent className="p-4">
@@ -96,9 +72,7 @@ export function ProductCard({ product, onEdit, onDelete }: ProductCardProps) {
           <div>
             {hasDiscount ? (
               <div className="flex items-baseline gap-2">
-                <span className="text-lg font-bold text-foreground">
-                  {formatCurrency(discountedPrice)}
-                </span>
+
                 <span className="text-sm text-muted-foreground line-through">
                   {formatCurrency(product.price)}
                 </span>

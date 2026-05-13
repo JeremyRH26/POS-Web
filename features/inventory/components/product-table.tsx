@@ -26,9 +26,10 @@ interface ProductTableProps {
   products: Product[]
   onEdit: (product: Product) => void
   onDelete: (productId: string) => void
+  onViewDetail?: (product: Product) => void
 }
 
-export function ProductTable({ products, onEdit, onDelete }: ProductTableProps) {
+export function ProductTable({ products, onEdit, onDelete, onViewDetail }: ProductTableProps) {
   if (products.length === 0) {
     return (
       <div className="text-center py-12">
@@ -59,7 +60,15 @@ export function ProductTable({ products, onEdit, onDelete }: ProductTableProps) 
             const hasDiscount = product.discount && product.discount > 0
 
             return (
-              <TableRow key={product.id}>
+              <TableRow
+                key={product.id}
+                className={
+                  onViewDetail
+                    ? 'cursor-pointer hover:bg-muted/40 data-[state=selected]:bg-muted'
+                    : undefined
+                }
+                onClick={() => onViewDetail?.(product)}
+              >
                 <TableCell>
                   <div className="w-12 h-12 rounded-lg bg-muted/30 flex items-center justify-center overflow-hidden">
                     {product.image ? (
@@ -113,7 +122,7 @@ export function ProductTable({ products, onEdit, onDelete }: ProductTableProps) 
                     <span className="text-muted-foreground">-</span>
                   )}
                 </TableCell>
-                <TableCell>
+                <TableCell onClick={(e) => e.stopPropagation()}>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon" className="h-8 w-8">
