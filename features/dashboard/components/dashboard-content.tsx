@@ -1,7 +1,8 @@
 'use client'
 
+import { useEffect, useState, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { mockDashboardMetrics } from '@/lib/mock-data'
+import { Spinner } from '@/components/ui/spinner'
 import { formatCurrency, formatNumber } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth-store'
 import {
@@ -10,69 +11,141 @@ import {
   Users,
   Package,
   AlertTriangle,
-  FileText,
+  XCircle,
   TrendingUp,
   TrendingDown,
 } from 'lucide-react'
 import { SalesChart } from './sales-chart'
 import { TopProductsChart } from './top-products-chart'
-import { RecentActivityCard } from './recent-activity-card'
+import { SalesTargetsCard } from './sales-targets-card'
+import { RejectionsCard } from './rejections-card'
+import { SellersCard } from './sellers-card'
+import {
+  dashboardApi,
+  type DashboardSummary,
+  type SalesTarget,
+  type RejectionMetric,
+  type SellerSales,
+  type SellerRejections,
+} from '@/lib/api'
+import { toast } from 'sonner'
 
 export function DashboardContent() {
   const { user } = useAuthStore()
-  const metrics = mockDashboardMetrics
+  const [loading, setLoading] = useState(true)
+  const [summary, setSummary] = useState<DashboardSummary | null>(null)
+  const [targets, setTargets] = useState<SalesTarget[]>([])
+  const [rejections, setRejections] = useState<RejectionMetric[]>([])
+  const [sellerSales, setSellerSales] = useState<SellerSales[]>([])
+  const [sellerRejections, setSellerRejections] = useState<SellerRejections[]>([])
+
+  const fetchAll = useCallback(async () => {
+    try {
+      const [summaryData, targetsData, rejectionsData, salesData, rejData] =
+        await Promise.all([
+          dashboardApi.getSummary(),
+          dashboardApi.getSalesTargets(),
+          dashboardApi.getRejectionMetrics(),
+          dashboardApi.getSalesBySeller(),
+          dashboardApi.getRejectionsBySeller(),
+        ])
+      setSummary(summaryData)
+      setTargets(targetsData)
+      setRejections(rejectionsData)
+      setSellerSales(salesData)
+      setSellerRejections(rejData)
+    } catch {
+      toast.error('Error al cargar los datos del dashboard')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchAll()
+  }, [fetchAll])
+
+  const refreshTargets = async () => {
+    try {
+      const data = await dashboardApi.getSalesTargets()
+      setTargets(data)
+    } catch {
+      toast.error('Error al recargar metas')
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="flex flex-col items-center gap-4">
+          <Spinner className="w-8 h-8" />
+          <p className="text-muted-foreground">Cargando dashboard...</p>
+        </div>
+      </div>
+    )
+  }
+
+  const kpis = summary?.kpis
+  const salesByMonth = (summary?.salesByMonth ?? []).map((s) => ({
+    month: s.month_label,
+    sales: Number(s.total_sales),
+  }))
+  const topProducts = (summary?.topProducts ?? []).map((p) => ({
+    name: p.name,
+    quantity: Number(p.quantity),
+  }))
 
   const stats = [
     {
-      title: 'Ventas Totales',
-      value: formatCurrency(metrics.totalSales),
+      title: 'Ventas del Mes',
+      value: formatCurrency(kpis?.monthlySales ?? 0),
       description: 'Este mes',
       icon: DollarSign,
-      trend: '+12.5%',
+      trend: `Hoy: ${formatCurrency(kpis?.todaySales ?? 0)}`,
       trendUp: true,
     },
     {
       title: 'Pedidos',
-      value: formatNumber(metrics.totalOrders),
+      value: formatNumber(kpis?.monthlyOrders ?? 0),
       description: 'Este mes',
       icon: ShoppingCart,
-      trend: '+8.2%',
-      trendUp: true,
+      trend: `${kpis?.openOrders ?? 0} pendientes`,
+      trendUp: (kpis?.openOrders ?? 0) > 0,
     },
     {
       title: 'Clientes',
-      value: formatNumber(metrics.totalClients),
+      value: formatNumber(kpis?.totalClients ?? 0),
       description: 'Total activos',
       icon: Users,
-      trend: '+3 nuevos',
+      trend: 'Registrados',
       trendUp: true,
     },
     {
       title: 'Productos',
-      value: formatNumber(metrics.totalProducts),
+      value: formatNumber(kpis?.totalProducts ?? 0),
       description: 'En catálogo',
       icon: Package,
-      trend: '156 SKUs',
-      trendUp: true,
+      trend: `${kpis?.lowStockItems ?? 0} stock bajo`,
+      trendUp: (kpis?.lowStockItems ?? 0) === 0,
     },
   ]
 
   const alerts = [
     {
       title: 'Stock Bajo',
-      value: formatNumber(metrics.lowStockProducts),
+      value: formatNumber(kpis?.lowStockItems ?? 0),
       description: 'Productos por agotarse',
       icon: AlertTriangle,
       color: 'text-warning',
       bgColor: 'bg-warning/10',
     },
     {
-      title: 'Facturas Pendientes',
-      value: formatNumber(metrics.pendingInvoices),
-      description: 'Por certificar',
-      icon: FileText,
-      color: 'text-chart-4',
-      bgColor: 'bg-chart-4/10',
+      title: 'Rechazos del Mes',
+      value: formatNumber(kpis?.monthlyRejections ?? 0),
+      description: 'Ordenes rechazadas',
+      icon: XCircle,
+      color: 'text-destructive',
+      bgColor: 'bg-destructive/10',
     },
   ]
 
@@ -141,35 +214,37 @@ export function DashboardContent() {
         ))}
       </div>
 
+      {/* Sales Targets (Editable) */}
+      <SalesTargetsCard targets={targets} onRefresh={refreshTargets} />
+
       {/* Charts Row */}
       <div className="grid gap-6 lg:grid-cols-7">
         <Card className="lg:col-span-4 border-border/50">
           <CardHeader>
             <CardTitle>Ventas por Mes</CardTitle>
-            <CardDescription>
-              Resumen de ventas de los últimos 6 meses
-            </CardDescription>
+            <CardDescription>Resumen de ventas de los últimos 6 meses</CardDescription>
           </CardHeader>
           <CardContent>
-            <SalesChart data={metrics.salesByMonth} />
+            <SalesChart data={salesByMonth} />
           </CardContent>
         </Card>
 
         <Card className="lg:col-span-3 border-border/50">
           <CardHeader>
             <CardTitle>Productos Más Vendidos</CardTitle>
-            <CardDescription>
-              Top 5 productos este mes
-            </CardDescription>
+            <CardDescription>Top 5 productos este mes</CardDescription>
           </CardHeader>
           <CardContent>
-            <TopProductsChart data={metrics.topProducts} />
+            <TopProductsChart data={topProducts} />
           </CardContent>
         </Card>
       </div>
 
-      {/* Recent Activity */}
-      <RecentActivityCard />
+      {/* Rejections + Sellers */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <RejectionsCard data={rejections} />
+        <SellersCard sales={sellerSales} rejections={sellerRejections} />
+      </div>
     </div>
   )
 }
