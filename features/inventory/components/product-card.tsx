@@ -42,12 +42,6 @@ export function ProductCard({ product, onViewDetail }: ProductCardProps) {
           <Package className="w-16 h-16 text-muted-foreground/30" />
         )}
 
-        {hasDiscount && (
-          <Badge className="absolute top-2 left-2 bg-destructive text-destructive-foreground">
-            -{product.discount}%
-          </Badge>
-        )}
-
         {isLowStock && (
           <Badge
             variant="outline"
@@ -89,7 +83,7 @@ export function ProductCard({ product, onViewDetail }: ProductCardProps) {
                 isLowStock ? 'text-warning' : 'text-muted-foreground'
               }`}
             >
-              {product.stock} {product.unit}s
+              {product.stock} {product.unit}es
             </span>
           </div>
         </div>

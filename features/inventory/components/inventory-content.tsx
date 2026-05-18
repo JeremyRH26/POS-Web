@@ -131,7 +131,7 @@ function normalizeProduct(item: unknown, index: number): Product {
     ),
     stock: Number(row.stock ?? row.quantity ?? 0),
     minStock: Number(row.min_stock ?? row.minStock ?? 0),
-    image: String(row.image ?? row.url ?? row.imagen ?? ''),
+    image: String(row.product_url ?? row.image ?? row.url ?? row.image ??''),
     discount: Number(row.discount ?? 0),
     unit: String(row.unit ?? 'unidad'),
     createdAt: parseDate(row.created_at ?? row.create ?? row.createdAt),
