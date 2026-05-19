@@ -11,7 +11,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { PRODUCT_CATEGORIES } from '@/config'
 import { Plus, Search, Filter, Pencil, Trash2, TriangleAlert } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { ProductCard } from './product-card'
@@ -153,6 +152,7 @@ export function InventoryContent() {
   const [categories, setCategories] = useState<CategoryItem[]>([])
   const [isLoadingCategories, setIsLoadingCategories] = useState(false)
   const [categoriesError, setCategoriesError] = useState<string | null>(null)
+  const [categorySearch, setCategorySearch] = useState<string>('')
   const [isCreateCategoryOpen, setIsCreateCategoryOpen] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState('')
   const [newCategoryDescription, setNewCategoryDescription] = useState('')
@@ -478,6 +478,12 @@ export function InventoryContent() {
 
   const lowStockCount = products.filter((p) => p.stock <= p.minStock).length
 
+  const filteredCategories = useMemo(() => {
+    const q = String(categorySearch ?? '').trim().toLowerCase()
+    if (!q) return categories
+    return categories.filter((c) => String(c.name ?? '').toLowerCase().includes(q))
+  }, [categories, categorySearch])
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -538,11 +544,15 @@ export function InventoryContent() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas</SelectItem>
-              {PRODUCT_CATEGORIES.map((cat) => (
-                <SelectItem key={cat} value={cat}>
-                  {cat}
-                </SelectItem>
-              ))}
+              {categories.length > 0 ? (
+                categories.map((cat) => (
+                  <SelectItem key={cat.id} value={cat.name}>
+                    {cat.name}
+                  </SelectItem>
+                ))
+              ) : (
+                <SelectItem value="all">Cargando categorías...</SelectItem>
+              )}
             </SelectContent>
           </Select>
           <Select value={stockFilter} onValueChange={setStockFilter}>
@@ -704,6 +714,16 @@ export function InventoryContent() {
               </div>
             )}
 
+            {/* Search categories */}
+            <div className="mt-3">
+              <Input
+                placeholder="Buscar categoría..."
+                value={categorySearch}
+                onChange={(e) => setCategorySearch(e.target.value)}
+                className="w-full"
+              />
+            </div>
+
             {categoriesError && (
               <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                 {categoriesError}
@@ -717,7 +737,7 @@ export function InventoryContent() {
             )}
 
             <ul className="space-y-2 max-h-80 overflow-auto">
-              {categories.map((category) => (
+              {filteredCategories.map((category) => (
                 <li
                   key={category.id}
                   className="rounded-md border px-3 py-2"

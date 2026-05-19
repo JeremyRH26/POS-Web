@@ -44,6 +44,8 @@ function humanizeKey(key: string) {
     updated_at: 'Actualizacion',
     stock: 'Existencia',
     min_stock: 'Existencia minima',
+    measure_description: 'Descripcion de unidad',
+    unit: 'Unidad',
   }
 
   return labels[key] || key
@@ -381,7 +383,7 @@ export function ProductDetailSheet({
           )}
         </SheetHeader>
 
-        <div className="flex flex-1 flex-col gap-6 py-4">
+        <div className="flex flex-1 flex-col gap-6 px-4 py-4">
           {!token && (
             <p className="text-sm text-muted-foreground">Inicia sesión para ver el detalle.</p>
           )}

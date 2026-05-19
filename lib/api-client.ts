@@ -24,7 +24,7 @@ interface RequestOptions extends Omit<RequestInit, 'method' | 'body'> {
   body?: unknown
 }
 
-const DEFAULT_API_URL = 'http://localhost:4000/api'
+const DEFAULT_API_URL = 'http://localhost:3001/api'
 
 function resolveApiUrl() {
   return (process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_URL).replace(/\/+$/, '')
