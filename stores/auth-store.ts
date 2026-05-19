@@ -2,35 +2,20 @@
 
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { User, UserRole } from '@/types'
-import { ROLE_PERMISSIONS } from '@/config'
-import { apiClient } from '@/lib/api-client'
+import type { User } from '@/types'
+import { MODULE_PERMISSION_CODES } from '@/config'
+import { loginRequest } from '@/lib/api'
 
 interface AuthState {
   user: User | null
   token: string | null
+  refreshToken: string | null
+  permissionCodes: string[]
   isAuthenticated: boolean
   isLoading: boolean
-  login: (email: string, password: string) => Promise<boolean>
+  login: (username: string, password: string) => Promise<boolean>
   logout: () => void
   hasPermission: (module: string) => boolean
-}
-
-interface LoginResponse {
-  token: string
-  tokenType: string
-  expiresIn: string
-  user: {
-    id: string
-    email: string
-    role: string
-  }
-}
-
-const allowedRoles: UserRole[] = ['admin', 'manager', 'sales', 'warehouse']
-
-function mapRole(role: string): UserRole {
-  return allowedRoles.includes(role as UserRole) ? (role as UserRole) : 'warehouse'
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -38,43 +23,45 @@ export const useAuthStore = create<AuthState>()(
     (set, get) => ({
       user: null,
       token: null,
+      refreshToken: null,
+      permissionCodes: [],
       isAuthenticated: false,
       isLoading: false,
 
-      login: async (email: string, password: string) => {
+      login: async (username: string, password: string) => {
+        set({ isLoading: true })
         try {
-          set({ isLoading: true })
-          const data = await apiClient.post<LoginResponse>('/users/login', {
-            email,
-            password,
-          })
-
-          const role = mapRole(data.user.role)
-          const now = new Date()
+          const data = await loginRequest(username.trim(), password)
+          const lowerRole = data.user.roleName.toLowerCase()
+          const mappedRole: User['role'] =
+            lowerRole.includes('super') || lowerRole.includes('admin')
+              ? 'admin'
+              : lowerRole.includes('prevendedor')
+                ? 'sales'
+                : lowerRole.includes('bodega')
+                  ? 'warehouse'
+                  : 'manager'
           set({
-            token: data.token,
             user: {
               id: data.user.id,
-              email: data.user.email,
-              name: data.user.email.split('@')[0],
-              role,
+              email: data.user.username,
+              name: data.user.fullName,
+              role: mappedRole,
+              roleName: data.user.roleName,
               avatar: undefined,
-              createdAt: now,
-              updatedAt: now,
+              createdAt: new Date(),
+              updatedAt: new Date(),
               permissions: [],
             },
+            token: data.token,
+            refreshToken: data.refreshToken ?? null,
+            permissionCodes: data.user.permissions ?? [],
             isAuthenticated: true,
             isLoading: false,
           })
-
           return true
         } catch {
-          set({
-            token: null,
-            user: null,
-            isAuthenticated: false,
-            isLoading: false,
-          })
+          set({ isLoading: false })
           return false
         }
       },
@@ -83,15 +70,18 @@ export const useAuthStore = create<AuthState>()(
         set({
           token: null,
           user: null,
+          token: null,
+          refreshToken: null,
+          permissionCodes: [],
           isAuthenticated: false,
         })
       },
 
       hasPermission: (module: string) => {
-        const { user } = get()
-        if (!user) return false
-        const permissions = ROLE_PERMISSIONS[user.role as UserRole]
-        return permissions.includes(module as (typeof permissions)[number])
+        const { permissionCodes } = get()
+        const required = MODULE_PERMISSION_CODES[module as keyof typeof MODULE_PERMISSION_CODES]
+        if (!required || required.length === 0) return true
+        return required.some((code) => permissionCodes.includes(code))
       },
     }),
     {

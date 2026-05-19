@@ -5,6 +5,8 @@ export interface User {
   email: string
   name: string
   role: UserRole
+  /** Nombre del rol como viene de la API (ej. Super administrador). */
+  roleName?: string
   avatar?: string
   createdAt: Date
   updatedAt: Date
